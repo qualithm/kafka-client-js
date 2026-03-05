@@ -1,7 +1,7 @@
 /**
  * Batch processing example.
  *
- * Demonstrates processing multiple items efficiently.
+ * Demonstrates constructing batches of Kafka messages.
  *
  * @example
  * ```bash
@@ -11,91 +11,53 @@
 
 /* eslint-disable no-console */
 
-import { greet } from "../src/index"
+import { type Message, parseBrokerAddress, type TopicPartition } from "../src/index"
 
-type Person = {
-  name: string
-  title?: string
-  formal?: boolean
-}
+const encoder = new TextEncoder()
 
 /**
- * Generate greeting for a person, using title if available.
+ * Create a batch of messages for a topic-partition.
  */
-function greetPerson(person: Person): string {
-  const displayName = person.title !== undefined ? `${person.title} ${person.name}` : person.name
-  return greet({ name: displayName, formal: person.formal })
-}
-
-/**
- * Process multiple people and return all greetings.
- */
-function greetAll(people: Person[]): string[] {
-  return people.map(greetPerson)
-}
-
-/**
- * Process people with progress callback.
- */
-function greetAllWithProgress(
-  people: Person[],
-  onProgress: (current: number, total: number, result: string) => void
-): string[] {
-  const results: string[] = []
-  const total = people.length
-
-  for (let i = 0; i < people.length; i++) {
-    const result = greetPerson(people[i])
-    results.push(result)
-    onProgress(i + 1, total, result)
-  }
-
-  return results
+function createBatch(
+  topicPartition: TopicPartition,
+  records: { key: string; value: string }[]
+): { topicPartition: TopicPartition; messages: Message[] } {
+  const messages: Message[] = records.map((r) => ({
+    key: encoder.encode(r.key),
+    value: encoder.encode(r.value)
+  }))
+  return { topicPartition, messages }
 }
 
 function main(): void {
   console.log("=== Batch Processing Examples ===\n")
 
-  // Sample data
-  const people: Person[] = [
-    { name: "Alice", formal: false },
-    { name: "Bob", title: "Mr.", formal: true },
-    { name: "Carol", title: "Dr.", formal: true },
-    { name: "Dave" },
-    { name: "Eve", title: "Prof.", formal: true }
-  ]
-
-  // Example 1: Simple batch processing
-  console.log("--- Example 1: Simple Batch ---")
-  const greetings = greetAll(people)
-  for (const greeting of greetings) {
-    console.log(`  ${greeting}`)
+  // Parse broker addresses
+  const brokers = ["kafka-1:9092", "kafka-2:9092", "kafka-3:9092"]
+  console.log("--- Broker Addresses ---")
+  for (const addr of brokers) {
+    const parsed = parseBrokerAddress(addr)
+    console.log(`  ${addr} => ${parsed.host}:${String(parsed.port)}`)
   }
   console.log()
 
-  // Example 2: With progress tracking
-  console.log("--- Example 2: With Progress ---")
-  greetAllWithProgress(people, (current, total, result) => {
-    const percent = ((current / total) * 100).toFixed(0)
-    console.log(`  [${percent.padStart(3)}%] ${result}`)
-  })
-  console.log()
+  // Create a batch of messages
+  const tp: TopicPartition = { topic: "user-events", partition: 0 }
+  const batch = createBatch(tp, [
+    { key: "user-1", value: JSON.stringify({ event: "login" }) },
+    { key: "user-2", value: JSON.stringify({ event: "purchase" }) },
+    { key: "user-3", value: JSON.stringify({ event: "logout" }) }
+  ])
 
-  // Example 3: Filter and transform
-  console.log("--- Example 3: Filter Formal Only ---")
-  const formalPeople = people.filter((p) => p.formal === true)
-  const formalGreetings = greetAll(formalPeople)
-  console.log(`  Found ${String(formalGreetings.length)} formal greetings:`)
-  for (const greeting of formalGreetings) {
-    console.log(`    ${greeting}`)
+  console.log("--- Message Batch ---")
+  console.log(`  Topic: ${batch.topicPartition.topic}`)
+  console.log(`  Partition: ${String(batch.topicPartition.partition)}`)
+  console.log(`  Messages: ${String(batch.messages.length)}`)
+  for (const msg of batch.messages) {
+    console.log(
+      `    Key: ${String(msg.key?.byteLength)} bytes, Value: ${String(msg.value?.byteLength)} bytes`
+    )
   }
-  console.log()
-
-  // Example 4: Reduce to single message
-  console.log("--- Example 4: Combined Message ---")
-  const allNames = people.map((p) => p.name).join(", ")
-  const combinedGreeting = greet({ name: `everyone (${allNames})` })
-  console.log(`  ${combinedGreeting}`)
 
   console.log("\nExamples complete.")
 }

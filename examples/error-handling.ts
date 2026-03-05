@@ -1,7 +1,7 @@
 /**
  * Error handling example.
  *
- * Demonstrates input validation and error handling patterns.
+ * Demonstrates the Kafka client error hierarchy and type narrowing.
  *
  * @example
  * ```bash
@@ -11,97 +11,67 @@
 
 /* eslint-disable no-console */
 
-import { greet, type GreetOptions } from "../src/index"
+import {
+  KafkaConfigError,
+  KafkaConnectionError,
+  KafkaError,
+  KafkaProtocolError,
+  KafkaTimeoutError
+} from "../src/index"
 
 /**
- * Validates greeting options before processing.
- * In a real library, you might throw custom errors.
+ * Simulate handling different error types.
  */
-function validateOptions(options: unknown): options is GreetOptions {
-  if (typeof options !== "object" || options === null) {
-    return false
+function handleError(error: unknown): void {
+  if (KafkaTimeoutError.isError(error)) {
+    console.log(`  Timeout (${String(error.timeoutMs)}ms) at broker: ${error.broker ?? "unknown"}`)
+    console.log(`  Retriable: ${String(error.retriable)}`)
+  } else if (KafkaConnectionError.isError(error)) {
+    console.log(`  Connection error at broker: ${error.broker ?? "unknown"}`)
+    console.log(`  Retriable: ${String(error.retriable)}`)
+  } else if (KafkaProtocolError.isError(error)) {
+    console.log(`  Protocol error code ${String(error.errorCode)}: ${error.message}`)
+    console.log(`  Retriable: ${String(error.retriable)}`)
+  } else if (KafkaConfigError.isError(error)) {
+    console.log(`  Configuration error: ${error.message}`)
+  } else if (KafkaError.isError(error)) {
+    console.log(`  Kafka error: ${error.message}`)
+  } else {
+    console.log(`  Unknown error: ${String(error)}`)
   }
-
-  const obj = options as Record<string, unknown>
-
-  if (typeof obj.name !== "string") {
-    return false
-  }
-
-  if (obj.formal !== undefined && typeof obj.formal !== "boolean") {
-    return false
-  }
-
-  return true
-}
-
-/**
- * Safe wrapper that validates input before greeting.
- */
-function safeGreet(options: unknown): string {
-  if (!validateOptions(options)) {
-    throw new Error("Invalid options: expected { name: string, formal?: boolean }")
-  }
-
-  // Validate name is not empty
-  if (options.name.trim() === "") {
-    throw new Error("Name cannot be empty or whitespace-only")
-  }
-
-  return greet(options)
 }
 
 function main(): void {
   console.log("=== Error Handling Examples ===\n")
 
-  // Example 1: Valid input
-  console.log("--- Example 1: Valid Input ---")
-  try {
-    const result = safeGreet({ name: "Valid User" })
-    console.log(`  Result: ${result}`)
-  } catch (error) {
-    console.log(`  Error: ${(error as Error).message}`)
-  }
+  // Example 1: Timeout error
+  console.log("--- Example 1: Timeout Error ---")
+  handleError(new KafkaTimeoutError("request timed out", 30000, { broker: "kafka-1:9092" }))
   console.log()
 
-  // Example 2: Missing name property
-  console.log("--- Example 2: Missing Name ---")
-  try {
-    const result = safeGreet({ formal: true })
-    console.log(`  Result: ${result}`)
-  } catch (error) {
-    console.log(`  Error: ${(error as Error).message}`)
-  }
+  // Example 2: Connection error
+  console.log("--- Example 2: Connection Error ---")
+  handleError(
+    new KafkaConnectionError("connection refused", {
+      broker: "kafka-2:9092",
+      cause: new Error("ECONNREFUSED")
+    })
+  )
   console.log()
 
-  // Example 3: Empty name
-  console.log("--- Example 3: Empty Name ---")
-  try {
-    const result = safeGreet({ name: "   " })
-    console.log(`  Result: ${result}`)
-  } catch (error) {
-    console.log(`  Error: ${(error as Error).message}`)
-  }
+  // Example 3: Protocol error (retriable)
+  console.log("--- Example 3: Retriable Protocol Error ---")
+  handleError(new KafkaProtocolError("not leader for partition", 6, true))
   console.log()
 
-  // Example 4: Wrong type for formal
-  console.log("--- Example 4: Invalid Formal Type ---")
-  try {
-    const result = safeGreet({ name: "Test", formal: "yes" })
-    console.log(`  Result: ${result}`)
-  } catch (error) {
-    console.log(`  Error: ${(error as Error).message}`)
-  }
+  // Example 4: Protocol error (fatal)
+  console.log("--- Example 4: Fatal Protocol Error ---")
+  handleError(new KafkaProtocolError("topic authorisation failed", 29, false))
   console.log()
 
-  // Example 5: Null input
-  console.log("--- Example 5: Null Input ---")
-  try {
-    const result = safeGreet(null)
-    console.log(`  Result: ${result}`)
-  } catch (error) {
-    console.log(`  Error: ${(error as Error).message}`)
-  }
+  // Example 5: Config error
+  console.log("--- Example 5: Config Error ---")
+  handleError(new KafkaConfigError("invalid broker address format"))
 
   console.log("\nExamples complete.")
 }

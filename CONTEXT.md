@@ -41,25 +41,31 @@ Registry, and Connect framework.
 
 ### Modules
 
-| Module     | Purpose          |
-| ---------- | ---------------- |
-| `index.ts` | Main entry point |
-| `greet.ts` | Greeting utility |
+| Module        | Purpose                                                                           |
+| ------------- | --------------------------------------------------------------------------------- |
+| `index.ts`    | Main entry point, barrel exports                                                  |
+| `greet.ts`    | Greeting utility (template placeholder)                                           |
+| `result.ts`   | `DecodeResult<T>` discriminated union and factory helpers                         |
+| `errors.ts`   | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses |
+| `config.ts`   | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`              |
+| `messages.ts` | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`          |
+| `api-keys.ts` | API key enum, version ranges, flexible version thresholds, `negotiateVersion`     |
 
 ### Features
 
-| Feature         | Status      | Notes                          |
-| --------------- | ----------- | ------------------------------ |
-| Producer        | Not started |                                |
-| Consumer        | Not started |                                |
-| Consumer Groups | Not started |                                |
-| Admin Client    | Not started |                                |
-| Protocol Layer  | Not started | Kafka binary protocol encoding |
-| Connection Pool | Not started |                                |
-| SASL Auth       | Not started |                                |
-| SSL/TLS         | Not started |                                |
-| Serialization   | Not started |                                |
-| Compression     | Not started | gzip, snappy, lz4, zstd        |
+| Feature         | Status      | Notes                                            |
+| --------------- | ----------- | ------------------------------------------------ |
+| Core Types      | Complete    | DecodeResult, errors, config, messages, API keys |
+| Producer        | Not started |                                                  |
+| Consumer        | Not started |                                                  |
+| Consumer Groups | Not started |                                                  |
+| Admin Client    | Not started |                                                  |
+| Protocol Layer  | Not started | Kafka binary protocol encoding                   |
+| Connection Pool | Not started |                                                  |
+| SASL Auth       | Not started |                                                  |
+| SSL/TLS         | Not started |                                                  |
+| Serialization   | Not started |                                                  |
+| Compression     | Not started | gzip, snappy, lz4, zstd                          |
 
 ### File Structure
 
@@ -122,12 +128,13 @@ Registry, and Connect framework.
 
 ### Core Types
 
-- [ ] Define `DecodeResult<T>` — shape: `{ value: T; bytesRead: number }` plus error variant
-- [ ] Define error hierarchy: retriable vs fatal, protocol-level vs connection-level
-- [ ] Error classes with static `isError()` helpers for type narrowing
-- [ ] Define `KafkaConfig`, `BrokerAddress` types
-- [ ] Define `Message`, `TopicPartition`, `Offset` types
-- [ ] Define API key enum and version ranges
+- [x] Define `DecodeResult<T>` — shape: `{ ok: true; value: T; bytesRead: number }` |
+      `{ ok: false; error: DecodeError }`
+- [x] Define error hierarchy: retriable vs fatal, protocol-level vs connection-level
+- [x] Error classes with static `isError()` helpers for type narrowing
+- [x] Define `KafkaConfig`, `BrokerAddress` types
+- [x] Define `Message`, `TopicPartition`, `Offset` types
+- [x] Define API key enum and version ranges
 
 Acceptance: All types compile, unit tests verify `isError()` narrows correctly, `DecodeResult`
 round-trips through codec signatures.
@@ -263,5 +270,6 @@ consumers; offset reset behaves correctly per strategy.
 
 > Append-only. Never edit or delete existing entries.
 
-| Date | Learning |
-| ---- | -------- |
+| Date       | Learning                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-03-06 | TypeScript `override readonly name = "SubclassName"` on Error subclasses causes TS2416 when the base uses a string literal type; declare `name` as `string` in the base class to allow overriding with narrower literals |
