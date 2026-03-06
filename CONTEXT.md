@@ -56,6 +56,7 @@ Registry, and Connect framework.
 | `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse`             |
 | `metadata.ts`         | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`                      |
 | `find-coordinator.ts` | FindCoordinator request/response codec (API key 10, v0–v4), `buildFindCoordinatorRequest`, `decodeFindCoordinatorResponse` |
+| `list-offsets.ts`     | ListOffsets request/response codec (API key 2, v0–v7), `buildListOffsetsRequest`, `decodeListOffsetsResponse`              |
 | `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry                           |
 | `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                 |
 
@@ -194,7 +195,7 @@ round-trip correctly; CRC validation catches corruption.
 - [x] ApiVersions request/response (v0–v3, bootstrap with v0 non-flexible header)
 - [x] Metadata request/response (broker/topic discovery)
 - [x] FindCoordinator request/response (v0–v4, needed by consumer groups)
-- [ ] ListOffsets request/response (needed by consumer offset reset)
+- [x] ListOffsets request/response (v0–v7, needed by consumer offset reset)
 
 ### Connection
 
