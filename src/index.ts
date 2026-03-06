@@ -67,3 +67,12 @@ export {
   requestHeaderVersion,
   responseHeaderVersion
 } from "./protocol-framing.js"
+
+// API messages
+export type { ApiVersionEntry, ApiVersionsRequest, ApiVersionsResponse } from "./api-versions.js"
+export {
+  apiVersionsToMap,
+  buildApiVersionsRequest,
+  decodeApiVersionsResponse,
+  encodeApiVersionsRequest
+} from "./api-versions.js"

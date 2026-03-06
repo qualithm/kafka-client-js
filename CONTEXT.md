@@ -53,6 +53,7 @@ Registry, and Connect framework.
 | `binary-reader.ts`    | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding        |
 | `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                    |
 | `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection |
+| `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse` |
 
 ### Features
 
@@ -65,7 +66,7 @@ Registry, and Connect framework.
 | Consumer         | Not started |                                                                                              |
 | Consumer Groups  | Not started |                                                                                              |
 | Admin Client     | Not started |                                                                                              |
-| Protocol Layer   | Not started | Kafka binary protocol encoding                                                               |
+| Protocol Layer   | In progress | ApiVersions (v0–v3) complete                                                                 |
 | Connection Pool  | Not started |                                                                                              |
 | SASL Auth        | Not started |                                                                                              |
 | SSL/TLS          | Not started |                                                                                              |
