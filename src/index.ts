@@ -76,3 +76,31 @@ export {
   decodeApiVersionsResponse,
   encodeApiVersionsRequest
 } from "./api-versions.js"
+
+// Record batches
+export type {
+  CompressionProvider,
+  Record,
+  RecordBatch,
+  RecordBatchAttributes,
+  RecordBatchOptions
+} from "./record-batch.js"
+export {
+  buildRecordBatch,
+  CompressionCodec,
+  crc32c,
+  createRecord,
+  decodeAttributes,
+  decodeRecordBatch,
+  encodeAttributes,
+  encodeRecordBatch,
+  hasCompressionProvider,
+  RECORD_BATCH_HEADER_OVERHEAD,
+  RECORD_BATCH_MAGIC,
+  RECORD_BATCH_METADATA_SIZE,
+  registerCompressionProvider,
+  TimestampType
+} from "./record-batch.js"
+
+// Compression providers
+export { deflateProvider, gzipProvider } from "./compression.js"

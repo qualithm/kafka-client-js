@@ -54,6 +54,8 @@ Registry, and Connect framework.
 | `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                    |
 | `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection |
 | `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse` |
+| `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry               |
+| `compression.ts`      | Compression providers for record batches: gzip, deflate                                                        |
 
 ### Features
 
@@ -67,11 +69,12 @@ Registry, and Connect framework.
 | Consumer Groups  | Not started |                                                                                              |
 | Admin Client     | Not started |                                                                                              |
 | Protocol Layer   | In progress | ApiVersions (v0–v3) complete                                                                 |
+| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, gzip compression                                      |
 | Connection Pool  | Not started |                                                                                              |
 | SASL Auth        | Not started |                                                                                              |
 | SSL/TLS          | Not started |                                                                                              |
 | Serialization    | Not started |                                                                                              |
-| Compression      | Not started | gzip, snappy, lz4, zstd                                                                      |
+| Compression      | In progress | gzip complete; snappy, lz4, zstd not started                                                 |
 
 ### File Structure
 
@@ -172,11 +175,11 @@ Acceptance: ApiVersions v0–v3 can be framed correctly using appropriate header
 
 ### Record Batches
 
-- [ ] RecordBatch v2 format (magic=2) encoding and decoding
-- [ ] Record encoding (attributes, timestamp delta, offset delta, key, value, headers)
-- [ ] CRC-32C validation
-- [ ] Compression codec abstraction (compress/decompress interface)
-- [ ] gzip compression
+- [x] RecordBatch v2 format (magic=2) encoding and decoding
+- [x] Record encoding (attributes, timestamp delta, offset delta, key, value, headers)
+- [x] CRC-32C validation
+- [x] Compression codec abstraction (compress/decompress interface)
+- [x] gzip compression
 - [ ] snappy compression
 - [ ] lz4 compression
 - [ ] zstd compression

@@ -34,8 +34,8 @@ export type Offset = {
 export type MessageHeader = {
   /** Header key. */
   readonly key: string
-  /** Header value as raw bytes. */
-  readonly value: Uint8Array
+  /** Header value as raw bytes. `null` represents an absent value. */
+  readonly value: Uint8Array | null
 }
 
 /**
