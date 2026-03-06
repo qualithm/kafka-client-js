@@ -41,34 +41,36 @@ Registry, and Connect framework.
 
 ### Modules
 
-| Module             | Purpose                                                                                                 |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `index.ts`         | Main entry point, barrel exports                                                                        |
-| `greet.ts`         | Greeting utility (template placeholder)                                                                 |
-| `result.ts`        | `DecodeResult<T>` discriminated union and factory helpers                                               |
-| `errors.ts`        | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                       |
-| `config.ts`        | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                    |
-| `messages.ts`      | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                |
-| `api-keys.ts`      | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                           |
-| `binary-reader.ts` | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding |
-| `binary-writer.ts` | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding             |
+| Module                | Purpose                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `index.ts`            | Main entry point, barrel exports                                                                               |
+| `greet.ts`            | Greeting utility (template placeholder)                                                                        |
+| `result.ts`           | `DecodeResult<T>` discriminated union and factory helpers                                                      |
+| `errors.ts`           | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                              |
+| `config.ts`           | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                           |
+| `messages.ts`         | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                       |
+| `api-keys.ts`         | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                                  |
+| `binary-reader.ts`    | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding        |
+| `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                    |
+| `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection |
 
 ### Features
 
-| Feature         | Status      | Notes                                                                      |
-| --------------- | ----------- | -------------------------------------------------------------------------- |
-| Core Types      | Complete    | DecodeResult, errors, config, messages, API keys                           |
-| Binary Codec    | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields |
-| Producer        | Not started |                                                                            |
-| Consumer        | Not started |                                                                            |
-| Consumer Groups | Not started |                                                                            |
-| Admin Client    | Not started |                                                                            |
-| Protocol Layer  | Not started | Kafka binary protocol encoding                                             |
-| Connection Pool | Not started |                                                                            |
-| SASL Auth       | Not started |                                                                            |
-| SSL/TLS         | Not started |                                                                            |
-| Serialization   | Not started |                                                                            |
-| Compression     | Not started | gzip, snappy, lz4, zstd                                                    |
+| Feature          | Status      | Notes                                                                                        |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------- |
+| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                             |
+| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                   |
+| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection |
+| Producer         | Not started |                                                                                              |
+| Consumer         | Not started |                                                                                              |
+| Consumer Groups  | Not started |                                                                                              |
+| Admin Client     | Not started |                                                                                              |
+| Protocol Layer   | Not started | Kafka binary protocol encoding                                                               |
+| Connection Pool  | Not started |                                                                                              |
+| SASL Auth        | Not started |                                                                                              |
+| SSL/TLS          | Not started |                                                                                              |
+| Serialization    | Not started |                                                                                              |
+| Compression      | Not started | gzip, snappy, lz4, zstd                                                                      |
 
 ### File Structure
 
@@ -158,12 +160,12 @@ encode/decode correctly, benchmark shows no regression vs baseline.
 
 ### Protocol Framing
 
-- [ ] Request header v0–v1 encoding (non-flexible: API key, version, correlation ID, client ID)
-- [ ] Request header v2 encoding (flexible: adds tagged fields)
-- [ ] Response header v0 decoding (non-flexible)
-- [ ] Response header v1 decoding (flexible: adds tagged fields)
-- [ ] Size-prefixed message framing
-- [ ] Header version selection based on API key and API version
+- [x] Request header v0–v1 encoding (non-flexible: API key, version, correlation ID, client ID)
+- [x] Request header v2 encoding (flexible: adds tagged fields)
+- [x] Response header v0 decoding (non-flexible)
+- [x] Response header v1 decoding (flexible: adds tagged fields)
+- [x] Size-prefixed message framing
+- [x] Header version selection based on API key and API version
 
 Acceptance: ApiVersions v0–v3 can be framed correctly using appropriate header versions.
 

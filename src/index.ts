@@ -51,3 +51,19 @@ export {
 export type { TaggedField } from "./binary-reader.js"
 export { BinaryReader } from "./binary-reader.js"
 export { BinaryWriter } from "./binary-writer.js"
+
+// Protocol framing
+export type {
+  RequestHeader,
+  RequestHeaderVersion,
+  ResponseHeader,
+  ResponseHeaderVersion
+} from "./protocol-framing.js"
+export {
+  decodeResponseHeader,
+  encodeRequestHeader,
+  frameRequest,
+  readResponseFrame,
+  requestHeaderVersion,
+  responseHeaderVersion
+} from "./protocol-framing.js"
