@@ -77,6 +77,17 @@ export {
   encodeApiVersionsRequest
 } from "./api-versions.js"
 export type {
+  Coordinator,
+  FindCoordinatorRequest,
+  FindCoordinatorResponse
+} from "./find-coordinator.js"
+export {
+  buildFindCoordinatorRequest,
+  CoordinatorType,
+  decodeFindCoordinatorResponse,
+  encodeFindCoordinatorRequest
+} from "./find-coordinator.js"
+export type {
   MetadataBroker,
   MetadataPartition,
   MetadataRequest,

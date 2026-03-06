@@ -41,22 +41,23 @@ Registry, and Connect framework.
 
 ### Modules
 
-| Module                | Purpose                                                                                                        |
-| --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `index.ts`            | Main entry point, barrel exports                                                                               |
-| `greet.ts`            | Greeting utility (template placeholder)                                                                        |
-| `result.ts`           | `DecodeResult<T>` discriminated union and factory helpers                                                      |
-| `errors.ts`           | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                              |
-| `config.ts`           | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                           |
-| `messages.ts`         | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                       |
-| `api-keys.ts`         | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                                  |
-| `binary-reader.ts`    | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding        |
-| `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                    |
-| `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection |
-| `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse` |
-| `metadata.ts`         | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`          |
-| `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry               |
-| `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                     |
+| Module                | Purpose                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`            | Main entry point, barrel exports                                                                                           |
+| `greet.ts`            | Greeting utility (template placeholder)                                                                                    |
+| `result.ts`           | `DecodeResult<T>` discriminated union and factory helpers                                                                  |
+| `errors.ts`           | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                                          |
+| `config.ts`           | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                                       |
+| `messages.ts`         | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                                   |
+| `api-keys.ts`         | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                                              |
+| `binary-reader.ts`    | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding                    |
+| `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                                |
+| `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection             |
+| `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse`             |
+| `metadata.ts`         | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`                      |
+| `find-coordinator.ts` | FindCoordinator request/response codec (API key 10, v0–v4), `buildFindCoordinatorRequest`, `decodeFindCoordinatorResponse` |
+| `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry                           |
+| `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                 |
 
 ### Features
 
@@ -192,7 +193,7 @@ round-trip correctly; CRC validation catches corruption.
 
 - [x] ApiVersions request/response (v0–v3, bootstrap with v0 non-flexible header)
 - [x] Metadata request/response (broker/topic discovery)
-- [ ] FindCoordinator request/response (needed by consumer groups)
+- [x] FindCoordinator request/response (v0–v4, needed by consumer groups)
 - [ ] ListOffsets request/response (needed by consumer offset reset)
 
 ### Connection
