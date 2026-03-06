@@ -55,7 +55,7 @@ Registry, and Connect framework.
 | `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection |
 | `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse` |
 | `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry               |
-| `compression.ts`      | Compression providers for record batches: gzip, deflate                                                        |
+| `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                     |
 
 ### Features
 
@@ -69,12 +69,12 @@ Registry, and Connect framework.
 | Consumer Groups  | Not started |                                                                                              |
 | Admin Client     | Not started |                                                                                              |
 | Protocol Layer   | In progress | ApiVersions (v0–v3) complete                                                                 |
-| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, gzip compression                                      |
+| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                 |
 | Connection Pool  | Not started |                                                                                              |
 | SASL Auth        | Not started |                                                                                              |
 | SSL/TLS          | Not started |                                                                                              |
 | Serialization    | Not started |                                                                                              |
-| Compression      | In progress | gzip complete; snappy, lz4, zstd not started                                                 |
+| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                     |
 
 ### File Structure
 
@@ -180,9 +180,9 @@ Acceptance: ApiVersions v0–v3 can be framed correctly using appropriate header
 - [x] CRC-32C validation
 - [x] Compression codec abstraction (compress/decompress interface)
 - [x] gzip compression
-- [ ] snappy compression
-- [ ] lz4 compression
-- [ ] zstd compression
+- [x] snappy compression (Xerial framing, via `createSnappyProvider`)
+- [x] lz4 compression (frame format, via `createLz4Provider`)
+- [x] zstd compression (via `createZstdProvider`)
 
 Acceptance: Can produce and parse records matching the Kafka on-wire format; compressed batches
 round-trip correctly; CRC validation catches corruption.

@@ -103,4 +103,13 @@ export {
 } from "./record-batch.js"
 
 // Compression providers
-export { deflateProvider, gzipProvider } from "./compression.js"
+export {
+  createLz4Provider,
+  createSnappyProvider,
+  createZstdProvider,
+  deflateProvider,
+  gzipProvider,
+  type Lz4Codec,
+  type SnappyCodec,
+  type ZstdCodec
+} from "./compression.js"
