@@ -76,6 +76,15 @@ export {
   decodeApiVersionsResponse,
   encodeApiVersionsRequest
 } from "./api-versions.js"
+export type {
+  MetadataBroker,
+  MetadataPartition,
+  MetadataRequest,
+  MetadataRequestTopic,
+  MetadataResponse,
+  MetadataTopic
+} from "./metadata.js"
+export { buildMetadataRequest, decodeMetadataResponse, encodeMetadataRequest } from "./metadata.js"
 
 // Record batches
 export type {

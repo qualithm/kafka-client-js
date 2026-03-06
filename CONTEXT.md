@@ -54,6 +54,7 @@ Registry, and Connect framework.
 | `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                    |
 | `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection |
 | `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse` |
+| `metadata.ts`         | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`          |
 | `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry               |
 | `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                     |
 
@@ -68,7 +69,7 @@ Registry, and Connect framework.
 | Consumer         | Not started |                                                                                              |
 | Consumer Groups  | Not started |                                                                                              |
 | Admin Client     | Not started |                                                                                              |
-| Protocol Layer   | In progress | ApiVersions (v0–v3) complete                                                                 |
+| Protocol Layer   | In progress | ApiVersions (v0–v3), Metadata (v0–v12) complete                                              |
 | Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                 |
 | Connection Pool  | Not started |                                                                                              |
 | SASL Auth        | Not started |                                                                                              |
@@ -189,8 +190,8 @@ round-trip correctly; CRC validation catches corruption.
 
 ### Initial API Messages
 
-- [ ] ApiVersions request/response (v0–v3, bootstrap with v0 non-flexible header)
-- [ ] Metadata request/response (broker/topic discovery)
+- [x] ApiVersions request/response (v0–v3, bootstrap with v0 non-flexible header)
+- [x] Metadata request/response (broker/topic discovery)
 - [ ] FindCoordinator request/response (needed by consumer groups)
 - [ ] ListOffsets request/response (needed by consumer offset reset)
 
