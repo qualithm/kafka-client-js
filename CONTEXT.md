@@ -41,31 +41,34 @@ Registry, and Connect framework.
 
 ### Modules
 
-| Module        | Purpose                                                                           |
-| ------------- | --------------------------------------------------------------------------------- |
-| `index.ts`    | Main entry point, barrel exports                                                  |
-| `greet.ts`    | Greeting utility (template placeholder)                                           |
-| `result.ts`   | `DecodeResult<T>` discriminated union and factory helpers                         |
-| `errors.ts`   | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses |
-| `config.ts`   | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`              |
-| `messages.ts` | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`          |
-| `api-keys.ts` | API key enum, version ranges, flexible version thresholds, `negotiateVersion`     |
+| Module             | Purpose                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `index.ts`         | Main entry point, barrel exports                                                                        |
+| `greet.ts`         | Greeting utility (template placeholder)                                                                 |
+| `result.ts`        | `DecodeResult<T>` discriminated union and factory helpers                                               |
+| `errors.ts`        | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                       |
+| `config.ts`        | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                    |
+| `messages.ts`      | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                |
+| `api-keys.ts`      | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                           |
+| `binary-reader.ts` | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding |
+| `binary-writer.ts` | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding             |
 
 ### Features
 
-| Feature         | Status      | Notes                                            |
-| --------------- | ----------- | ------------------------------------------------ |
-| Core Types      | Complete    | DecodeResult, errors, config, messages, API keys |
-| Producer        | Not started |                                                  |
-| Consumer        | Not started |                                                  |
-| Consumer Groups | Not started |                                                  |
-| Admin Client    | Not started |                                                  |
-| Protocol Layer  | Not started | Kafka binary protocol encoding                   |
-| Connection Pool | Not started |                                                  |
-| SASL Auth       | Not started |                                                  |
-| SSL/TLS         | Not started |                                                  |
-| Serialization   | Not started |                                                  |
-| Compression     | Not started | gzip, snappy, lz4, zstd                          |
+| Feature         | Status      | Notes                                                                      |
+| --------------- | ----------- | -------------------------------------------------------------------------- |
+| Core Types      | Complete    | DecodeResult, errors, config, messages, API keys                           |
+| Binary Codec    | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields |
+| Producer        | Not started |                                                                            |
+| Consumer        | Not started |                                                                            |
+| Consumer Groups | Not started |                                                                            |
+| Admin Client    | Not started |                                                                            |
+| Protocol Layer  | Not started | Kafka binary protocol encoding                                             |
+| Connection Pool | Not started |                                                                            |
+| SASL Auth       | Not started |                                                                            |
+| SSL/TLS         | Not started |                                                                            |
+| Serialization   | Not started |                                                                            |
+| Compression     | Not started | gzip, snappy, lz4, zstd                                                    |
 
 ### File Structure
 
@@ -141,14 +144,14 @@ round-trips through codec signatures.
 
 ### Binary Codec
 
-- [ ] `BinaryReader` — bounds-checked cursor over `Uint8Array`
-- [ ] `BinaryWriter` — auto-growing buffer builder (doubling strategy)
-- [ ] Kafka signed varint (zigzag encoding)
-- [ ] Kafka unsigned varint
-- [ ] Nullable/compact string encoding
-- [ ] Nullable/compact bytes encoding
-- [ ] Nullable/compact array encoding
-- [ ] Tagged fields (KIP-482 flexible versions)
+- [x] `BinaryReader` — bounds-checked cursor over `Uint8Array`
+- [x] `BinaryWriter` — auto-growing buffer builder (doubling strategy)
+- [x] Kafka signed varint (zigzag encoding)
+- [x] Kafka unsigned varint
+- [x] Nullable/compact string encoding
+- [x] Nullable/compact bytes encoding
+- [x] Nullable/compact array encoding
+- [x] Tagged fields (KIP-482 flexible versions)
 
 Acceptance: Property-based tests prove round-trip for all primitive types, tagged fields
 encode/decode correctly, benchmark shows no regression vs baseline.

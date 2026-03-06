@@ -46,3 +46,8 @@ export {
   isFlexibleVersion,
   negotiateVersion
 } from "./api-keys.js"
+
+// Binary codec
+export type { TaggedField } from "./binary-reader.js"
+export { BinaryReader } from "./binary-reader.js"
+export { BinaryWriter } from "./binary-writer.js"
