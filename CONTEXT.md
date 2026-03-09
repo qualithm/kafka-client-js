@@ -65,23 +65,23 @@ Registry, and Connect framework.
 
 ### Features
 
-| Feature          | Status      | Notes                                                                                                              |
-| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
-| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                                   |
-| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                                         |
-| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                       |
-| Producer         | Not started |                                                                                                                    |
-| Consumer         | Not started |                                                                                                                    |
-| Consumer Groups  | Not started |                                                                                                                    |
-| Admin Client     | Not started |                                                                                                                    |
-| Protocol Layer   | In progress | ApiVersions (v0–v3), Metadata (v0–v12) complete                                                                    |
-| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                                       |
-| Connection       | Partial     | Socket adapter interface, single-broker connection with correlation and timeouts, Bun and Node.js runtime adapters |
-| Connection Pool  | Not started |                                                                                                                    |
-| SASL Auth        | Not started |                                                                                                                    |
-| SSL/TLS          | Not started |                                                                                                                    |
-| Serialization    | Not started |                                                                                                                    |
-| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                                           |
+| Feature          | Status      | Notes                                                                                                               |
+| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                                    |
+| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                                          |
+| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                        |
+| Producer         | Not started |                                                                                                                     |
+| Consumer         | Not started |                                                                                                                     |
+| Consumer Groups  | Not started |                                                                                                                     |
+| Admin Client     | Not started |                                                                                                                     |
+| Protocol Layer   | In progress | ApiVersions (v0–v3), Metadata (v0–v12) complete                                                                     |
+| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                                        |
+| Connection       | Partial     | Socket adapter interface, single-broker connection with correlation and timeouts, Bun/Node.js/Deno runtime adapters |
+| Connection Pool  | Not started |                                                                                                                     |
+| SASL Auth        | Not started |                                                                                                                     |
+| SSL/TLS          | Not started |                                                                                                                     |
+| Serialization    | Not started |                                                                                                                     |
+| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                                            |
 
 ### File Structure
 
@@ -206,7 +206,7 @@ round-trip correctly; CRC validation catches corruption.
 - [x] Socket adapter interface (runtime provides TCP/TLS)
 - [x] Bun runtime adapter (`Bun.connect`)
 - [x] Node.js runtime adapter (`net`/`tls`)
-- [ ] Deno runtime adapter (`Deno.connect`)
+- [x] Deno runtime adapter (`Deno.connect`)
 - [x] Request/response correlation (correlation ID mapping)
 - [ ] Broker discovery from metadata
 - [ ] Connection pool — max connections per broker, lifecycle management
