@@ -13,6 +13,13 @@ type MockDenoConn = {
   close: ReturnType<typeof vi.fn>
 }
 
+// Capture the real Deno global (if present) so we can preserve runtime internals
+// like `unrefTimer` that Deno's Node.js compat layer relies on.
+const realDeno =
+  (globalThis as Record<string, unknown>).Deno !== undefined
+    ? { ...((globalThis as Record<string, unknown>).Deno as Record<string, unknown>) }
+    : {}
+
 let mockConn: MockDenoConn
 let readableController: ReadableStreamDefaultController<Uint8Array>
 let denoConnectSpy: ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<MockDenoConn>>>
@@ -47,6 +54,7 @@ beforeEach(() => {
     .mockResolvedValue(mockConn)
 
   vi.stubGlobal("Deno", {
+    ...realDeno,
     connect: denoConnectSpy,
     connectTls: denoConnectTlsSpy
   })
