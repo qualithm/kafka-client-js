@@ -155,6 +155,9 @@ export type { KafkaSocket, SocketConnectOptions, SocketFactory } from "./socket.
 // Bun socket adapter
 export { createBunSocketFactory } from "./bun-socket.js"
 
+// Node.js socket adapter
+export { createNodeSocketFactory } from "./node-socket.js"
+
 // Connection
 export type { ConnectionOptions } from "./connection.js"
 export { KafkaConnection } from "./connection.js"
