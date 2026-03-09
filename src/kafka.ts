@@ -11,6 +11,9 @@
 import { type BrokerInfo, ConnectionPool, type ConnectionPoolOptions } from "./broker-pool.js"
 import { type BrokerAddress, type KafkaConfig, parseBrokerAddress } from "./config.js"
 import { KafkaConfigError, KafkaConnectionError } from "./errors.js"
+import type { Acks } from "./produce.js"
+import { KafkaProducer, type Partitioner, type ProducerOptions } from "./producer.js"
+import type { CompressionCodec } from "./record-batch.js"
 import type { SocketFactory } from "./socket.js"
 
 // ---------------------------------------------------------------------------
@@ -37,6 +40,41 @@ export type KafkaOptions = {
   readonly socketFactory: SocketFactory
   /** Maximum connections per broker (default: 1). */
   readonly maxConnectionsPerBroker?: number
+}
+
+/**
+ * Options for creating a producer from a {@link Kafka} client.
+ */
+export type KafkaProducerOptions = {
+  /**
+   * Acknowledgement mode.
+   * @default Acks.All (-1)
+   */
+  readonly acks?: Acks
+  /**
+   * Timeout in milliseconds for the broker to acknowledge the produce request.
+   * @default 30000
+   */
+  readonly timeoutMs?: number
+  /**
+   * Custom partitioner function.
+   * @default defaultPartitioner
+   */
+  readonly partitioner?: Partitioner
+  /**
+   * Compression codec for record batches.
+   * @default CompressionCodec.NONE
+   */
+  readonly compression?: CompressionCodec
+  /**
+   * Whether this is an idempotent producer.
+   * @default false
+   */
+  readonly idempotent?: boolean
+  /**
+   * Transactional ID for transactional producers.
+   */
+  readonly transactionalId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +211,24 @@ export class Kafka {
   async refreshMetadata(): Promise<void> {
     const pool = this.getPool()
     await pool.refreshMetadata()
+  }
+
+  /**
+   * Create a producer bound to this client.
+   *
+   * The client must be connected before creating a producer.
+   *
+   * @param options - Producer-specific options.
+   * @returns A new {@link KafkaProducer} instance.
+   * @throws {KafkaConnectionError} If the client is not connected.
+   */
+  producer(options?: KafkaProducerOptions): KafkaProducer {
+    const pool = this.getPool()
+    const producerOpts: ProducerOptions = {
+      connectionPool: pool,
+      ...options
+    }
+    return new KafkaProducer(producerOpts)
   }
 
   // -------------------------------------------------------------------------

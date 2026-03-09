@@ -4,6 +4,7 @@ import { ApiKey } from "../../api-keys"
 import { BinaryWriter } from "../../binary-writer"
 import { KafkaConfigError, KafkaConnectionError } from "../../errors"
 import { createKafka, Kafka, type KafkaOptions } from "../../kafka"
+import { KafkaProducer } from "../../producer"
 import type { KafkaSocket, SocketFactory } from "../../socket"
 
 // ---------------------------------------------------------------------------
@@ -414,6 +415,31 @@ describe("Kafka", () => {
       const kafka = new Kafka(defaultOptions())
       await kafka.connect()
       expect(kafka.connectionPool).toBeDefined()
+      await kafka.disconnect()
+    })
+  })
+
+  describe("producer", () => {
+    it("should create a KafkaProducer when connected", async () => {
+      const kafka = new Kafka(defaultOptions())
+      await kafka.connect()
+      const producer = kafka.producer()
+      expect(producer).toBeInstanceOf(KafkaProducer)
+      await producer.close()
+      await kafka.disconnect()
+    })
+
+    it("should throw when not connected", () => {
+      const kafka = new Kafka(defaultOptions())
+      expect(() => kafka.producer()).toThrow(KafkaConnectionError)
+    })
+
+    it("should accept producer options", async () => {
+      const kafka = new Kafka(defaultOptions())
+      await kafka.connect()
+      const producer = kafka.producer({ timeoutMs: 5000 })
+      expect(producer).toBeInstanceOf(KafkaProducer)
+      await producer.close()
       await kafka.disconnect()
     })
   })

@@ -112,6 +112,23 @@ export type {
 } from "./metadata.js"
 export { buildMetadataRequest, decodeMetadataResponse, encodeMetadataRequest } from "./metadata.js"
 
+// Produce API
+export type {
+  ProducePartitionData,
+  ProducePartitionResponse,
+  ProduceRecordError,
+  ProduceRequest,
+  ProduceResponse,
+  ProduceTopicData,
+  ProduceTopicResponse
+} from "./produce.js"
+export {
+  Acks,
+  buildProduceRequest,
+  decodeProduceResponse,
+  encodeProduceRequest
+} from "./produce.js"
+
 // Record batches
 export type {
   CompressionProvider,
@@ -170,5 +187,14 @@ export type { BrokerInfo, ConnectionPoolOptions } from "./broker-pool.js"
 export { ConnectionPool, discoverBrokers } from "./broker-pool.js"
 
 // Kafka client
-export type { KafkaOptions, KafkaState } from "./kafka.js"
+export type { KafkaOptions, KafkaProducerOptions, KafkaState } from "./kafka.js"
 export { createKafka, Kafka } from "./kafka.js"
+
+// Producer
+export type { Partitioner, ProducerOptions } from "./producer.js"
+export {
+  createProducer,
+  defaultPartitioner,
+  KafkaProducer,
+  roundRobinPartitioner
+} from "./producer.js"
