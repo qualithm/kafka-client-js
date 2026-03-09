@@ -59,6 +59,8 @@ Registry, and Connect framework.
 | `list-offsets.ts`     | ListOffsets request/response codec (API key 2, v0–v7), `buildListOffsetsRequest`, `decodeListOffsetsResponse`              |
 | `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry                           |
 | `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                 |
+| `socket.ts`           | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                  |
+| `connection.ts`       | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management                         |
 
 ### Features
 
@@ -73,6 +75,7 @@ Registry, and Connect framework.
 | Admin Client     | Not started |                                                                                              |
 | Protocol Layer   | In progress | ApiVersions (v0–v3), Metadata (v0–v12) complete                                              |
 | Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                 |
+| Connection       | Partial     | Socket adapter interface, single-broker connection with correlation and timeouts             |
 | Connection Pool  | Not started |                                                                                              |
 | SASL Auth        | Not started |                                                                                              |
 | SSL/TLS          | Not started |                                                                                              |
@@ -199,11 +202,11 @@ round-trip correctly; CRC validation catches corruption.
 
 ### Connection
 
-- [ ] Socket adapter interface (runtime provides TCP/TLS)
+- [x] Socket adapter interface (runtime provides TCP/TLS)
 - [ ] Bun runtime adapter (`Bun.connect`)
 - [ ] Node.js runtime adapter (`net`/`tls`)
 - [ ] Deno runtime adapter (`Deno.connect`)
-- [ ] Request/response correlation (correlation ID mapping)
+- [x] Request/response correlation (correlation ID mapping)
 - [ ] Broker discovery from metadata
 - [ ] Connection pool — max connections per broker, lifecycle management
 

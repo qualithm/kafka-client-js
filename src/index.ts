@@ -148,3 +148,10 @@ export {
   type SnappyCodec,
   type ZstdCodec
 } from "./compression.js"
+
+// Socket adapter
+export type { KafkaSocket, SocketConnectOptions, SocketFactory } from "./socket.js"
+
+// Connection
+export type { ConnectionOptions } from "./connection.js"
+export { KafkaConnection } from "./connection.js"
