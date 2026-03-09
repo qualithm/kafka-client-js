@@ -168,3 +168,7 @@ export { KafkaConnection } from "./connection.js"
 // Broker pool & discovery
 export type { BrokerInfo, ConnectionPoolOptions } from "./broker-pool.js"
 export { ConnectionPool, discoverBrokers } from "./broker-pool.js"
+
+// Kafka client
+export type { KafkaOptions, KafkaState } from "./kafka.js"
+export { createKafka, Kafka } from "./kafka.js"

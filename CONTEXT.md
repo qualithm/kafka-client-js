@@ -62,6 +62,7 @@ Registry, and Connect framework.
 | `socket.ts`           | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                  |
 | `connection.ts`       | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management                         |
 | `broker-pool.ts`      | `ConnectionPool` with per-broker pooling, `discoverBrokers` for cluster discovery via Metadata API                         |
+| `kafka.ts`            | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect)                        |
 | `bun-socket.ts`       | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                 |     | `node-socket.ts` | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling |
 
 ### Features
@@ -79,6 +80,7 @@ Registry, and Connect framework.
 | Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                                                                                                                |
 | Connection       | Complete    | Socket adapter interface, single-broker connection with correlation and timeouts, Bun/Node.js/Deno runtime adapters, broker discovery from metadata, connection pool with per-broker limits |
 | Connection Pool  | Complete    | Per-broker pooling, idle/active tracking, waiter queue, metadata refresh                                                                                                                    |
+| API Design       | Partial     | `Kafka` class, `createKafka()` factory, connect/disconnect lifecycle; producer/consumer/admin factory methods not started                                                                   |
 | SASL Auth        | Not started |                                                                                                                                                                                             |
 | SSL/TLS          | Not started |                                                                                                                                                                                             |
 | Serialization    | Not started |                                                                                                                                                                                             |
@@ -217,8 +219,11 @@ tests against a real broker; connection pool manages connect/disconnect cleanly.
 
 ### API Design
 
-- [ ] Factory function `createKafka()` alongside class constructor
-- [ ] Resource lifecycle interface (connect/disconnect patterns)
+- [x] Factory function `createKafka()` alongside class constructor
+- [x] Resource lifecycle interface (connect/disconnect patterns)
+- [ ] Producer factory method
+- [ ] Consumer factory method
+- [ ] Admin client factory method
 
 ### Testing Infrastructure
 
