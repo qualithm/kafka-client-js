@@ -13,12 +13,10 @@ type MockDenoConn = {
   close: ReturnType<typeof vi.fn>
 }
 
-// Capture the real Deno global (if present) so we can preserve runtime internals
-// like `unrefTimer` that Deno's Node.js compat layer relies on.
-const realDeno =
-  (globalThis as Record<string, unknown>).Deno !== undefined
-    ? { ...((globalThis as Record<string, unknown>).Deno as Record<string, unknown>) }
-    : {}
+// Keep a direct reference to the real Deno global (if present) so we can
+// preserve runtime internals like `unrefTimer` that Deno's Node.js compat
+// layer relies on. A spread would miss non-enumerable properties.
+const realDenoRef = (globalThis as Record<string, unknown>).Deno as object | undefined
 
 let mockConn: MockDenoConn
 let readableController: ReadableStreamDefaultController<Uint8Array>
@@ -53,14 +51,19 @@ beforeEach(() => {
     .fn<(...args: unknown[]) => Promise<MockDenoConn>>()
     .mockResolvedValue(mockConn)
 
-  vi.stubGlobal("Deno", {
-    ...realDeno,
-    connect: denoConnectSpy,
-    connectTls: denoConnectTlsSpy
-  })
+  // Object.create preserves non-enumerable Deno properties (e.g. unrefTimer)
+  // via the prototype chain, avoiding breakage in Deno's Node.js compat layer.
+  const mockDeno =
+    realDenoRef !== undefined
+      ? (Object.create(realDenoRef) as Record<string, unknown>)
+      : ({} as Record<string, unknown>)
+  mockDeno.connect = denoConnectSpy
+  mockDeno.connectTls = denoConnectTlsSpy
+  vi.stubGlobal("Deno", mockDeno)
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -167,8 +170,12 @@ describe("createDenoSocketFactory", () => {
     it("throws when Deno global is not available", async () => {
       vi.stubGlobal("Deno", undefined)
       const factory = createDenoSocketFactory()
+      const promise = factory(buildConnectOptions())
 
-      await expect(factory(buildConnectOptions())).rejects.toThrow("Deno runtime not detected")
+      // Restore immediately so Deno runtime timer internals remain functional
+      vi.unstubAllGlobals()
+
+      await expect(promise).rejects.toThrow("Deno runtime not detected")
     })
   })
 
