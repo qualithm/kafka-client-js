@@ -164,3 +164,7 @@ export { createDenoSocketFactory } from "./deno-socket.js"
 // Connection
 export type { ConnectionOptions } from "./connection.js"
 export { KafkaConnection } from "./connection.js"
+
+// Broker pool & discovery
+export type { BrokerInfo, ConnectionPoolOptions } from "./broker-pool.js"
+export { ConnectionPool, discoverBrokers } from "./broker-pool.js"
