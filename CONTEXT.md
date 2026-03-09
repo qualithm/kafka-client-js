@@ -61,26 +61,27 @@ Registry, and Connect framework.
 | `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                 |
 | `socket.ts`           | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                  |
 | `connection.ts`       | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management                         |
+| `bun-socket.ts`       | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                 |
 
 ### Features
 
-| Feature          | Status      | Notes                                                                                        |
-| ---------------- | ----------- | -------------------------------------------------------------------------------------------- |
-| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                             |
-| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                   |
-| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection |
-| Producer         | Not started |                                                                                              |
-| Consumer         | Not started |                                                                                              |
-| Consumer Groups  | Not started |                                                                                              |
-| Admin Client     | Not started |                                                                                              |
-| Protocol Layer   | In progress | ApiVersions (v0–v3), Metadata (v0–v12) complete                                              |
-| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                 |
-| Connection       | Partial     | Socket adapter interface, single-broker connection with correlation and timeouts             |
-| Connection Pool  | Not started |                                                                                              |
-| SASL Auth        | Not started |                                                                                              |
-| SSL/TLS          | Not started |                                                                                              |
-| Serialization    | Not started |                                                                                              |
-| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                     |
+| Feature          | Status      | Notes                                                                                                 |
+| ---------------- | ----------- | ----------------------------------------------------------------------------------------------------- |
+| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                      |
+| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                            |
+| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection          |
+| Producer         | Not started |                                                                                                       |
+| Consumer         | Not started |                                                                                                       |
+| Consumer Groups  | Not started |                                                                                                       |
+| Admin Client     | Not started |                                                                                                       |
+| Protocol Layer   | In progress | ApiVersions (v0–v3), Metadata (v0–v12) complete                                                       |
+| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                          |
+| Connection       | Partial     | Socket adapter interface, single-broker connection with correlation and timeouts, Bun runtime adapter |
+| Connection Pool  | Not started |                                                                                                       |
+| SASL Auth        | Not started |                                                                                                       |
+| SSL/TLS          | Not started |                                                                                                       |
+| Serialization    | Not started |                                                                                                       |
+| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                              |
 
 ### File Structure
 
@@ -203,7 +204,7 @@ round-trip correctly; CRC validation catches corruption.
 ### Connection
 
 - [x] Socket adapter interface (runtime provides TCP/TLS)
-- [ ] Bun runtime adapter (`Bun.connect`)
+- [x] Bun runtime adapter (`Bun.connect`)
 - [ ] Node.js runtime adapter (`net`/`tls`)
 - [ ] Deno runtime adapter (`Deno.connect`)
 - [x] Request/response correlation (correlation ID mapping)
