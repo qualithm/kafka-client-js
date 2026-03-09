@@ -42,7 +42,7 @@ Registry, and Connect framework.
 ### Modules
 
 | Module                | Purpose                                                                                                                    |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------- | --- | ---------------- | ------------------------------------------------------------------------------------------ |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `index.ts`            | Main entry point, barrel exports                                                                                           |
 | `greet.ts`            | Greeting utility (template placeholder)                                                                                    |
 | `result.ts`           | `DecodeResult<T>` discriminated union and factory helpers                                                                  |
@@ -63,7 +63,9 @@ Registry, and Connect framework.
 | `connection.ts`       | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management                         |
 | `broker-pool.ts`      | `ConnectionPool` with per-broker pooling, `discoverBrokers` for cluster discovery via Metadata API                         |
 | `kafka.ts`            | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect)                        |
-| `bun-socket.ts`       | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                 |     | `node-socket.ts` | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling |
+| `bun-socket.ts`       | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                 |
+| `node-socket.ts`      | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling                                 |
+| `deno-socket.ts`      | Deno runtime socket adapter via `Deno.connect()`, TCP and TLS support                                                      |
 
 ### Features
 
