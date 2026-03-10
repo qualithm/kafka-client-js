@@ -10,7 +10,15 @@
 
 import { type BrokerInfo, ConnectionPool, type ConnectionPoolOptions } from "./broker-pool.js"
 import { type BrokerAddress, type KafkaConfig, parseBrokerAddress } from "./config.js"
+import {
+  type ConsumerOptions,
+  type ConsumerRetryConfig,
+  KafkaConsumer,
+  type OffsetResetStrategy,
+  type RebalanceListener
+} from "./consumer.js"
 import { KafkaConfigError, KafkaConnectionError } from "./errors.js"
+import type { FetchIsolationLevel } from "./fetch.js"
 import type { Acks } from "./produce.js"
 import {
   type BatchConfig,
@@ -35,6 +43,82 @@ import type { SocketFactory } from "./socket.js"
  * - `disconnecting` — {@link Kafka.disconnect} is in progress
  */
 export type KafkaState = "disconnected" | "connecting" | "connected" | "disconnecting"
+
+/**
+ * Options for creating a consumer from a {@link Kafka} client.
+ */
+export type KafkaConsumerOptions = {
+  /**
+   * The consumer group ID.
+   */
+  readonly groupId: string
+  /**
+   * Session timeout in milliseconds.
+   * @default 30000
+   */
+  readonly sessionTimeoutMs?: number
+  /**
+   * Rebalance timeout in milliseconds.
+   * @default 60000
+   */
+  readonly rebalanceTimeoutMs?: number
+  /**
+   * Heartbeat interval in milliseconds.
+   * @default 3000
+   */
+  readonly heartbeatIntervalMs?: number
+  /**
+   * Maximum bytes per partition.
+   * @default 1048576
+   */
+  readonly maxPartitionBytes?: number
+  /**
+   * Maximum bytes per fetch request.
+   * @default 52428800
+   */
+  readonly maxBytes?: number
+  /**
+   * Minimum bytes for the broker to return.
+   * @default 1
+   */
+  readonly minBytes?: number
+  /**
+   * Maximum wait time for the broker to accumulate data.
+   * @default 500
+   */
+  readonly maxWaitMs?: number
+  /**
+   * Offset reset strategy.
+   * @default "latest"
+   */
+  readonly offsetReset?: OffsetResetStrategy
+  /**
+   * Whether to auto-commit offsets.
+   * @default true
+   */
+  readonly autoCommit?: boolean
+  /**
+   * Auto-commit interval in milliseconds.
+   * @default 5000
+   */
+  readonly autoCommitIntervalMs?: number
+  /**
+   * Fetch isolation level.
+   */
+  readonly isolationLevel?: (typeof FetchIsolationLevel)[keyof typeof FetchIsolationLevel]
+  /**
+   * Rebalance listener callbacks.
+   */
+  readonly rebalanceListener?: RebalanceListener
+  /**
+   * Group instance ID for static membership.
+   */
+  readonly groupInstanceId?: string | null
+  /**
+   * Retry configuration.
+   */
+  readonly retry?: ConsumerRetryConfig
+}
 
 /**
  * Options for creating a {@link Kafka} client.
@@ -244,6 +328,24 @@ export class Kafka {
       ...options
     }
     return new KafkaProducer(producerOpts)
+  }
+
+  /**
+   * Create a consumer bound to this client.
+   *
+   * The client must be connected before creating a consumer.
+   *
+   * @param options - Consumer-specific options.
+   * @returns A new {@link KafkaConsumer} instance.
+   * @throws {KafkaConnectionError} If the client is not connected.
+   */
+  consumer(options: KafkaConsumerOptions): KafkaConsumer {
+    const pool = this.getPool()
+    const consumerOpts: ConsumerOptions = {
+      connectionPool: pool,
+      ...options
+    }
+    return new KafkaConsumer(consumerOpts)
   }
 
   // -------------------------------------------------------------------------

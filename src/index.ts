@@ -213,7 +213,12 @@ export type { BrokerInfo, ConnectionPoolOptions } from "./broker-pool.js"
 export { ConnectionPool, discoverBrokers } from "./broker-pool.js"
 
 // Kafka client
-export type { KafkaOptions, KafkaProducerOptions, KafkaState } from "./kafka.js"
+export type {
+  KafkaConsumerOptions,
+  KafkaOptions,
+  KafkaProducerOptions,
+  KafkaState
+} from "./kafka.js"
 export { createKafka, Kafka } from "./kafka.js"
 
 // Producer
@@ -224,3 +229,83 @@ export {
   KafkaProducer,
   roundRobinPartitioner
 } from "./producer.js"
+
+// Consumer
+export type {
+  AssignedPartition,
+  ConsumerOptions,
+  ConsumerRetryConfig,
+  RebalanceListener
+} from "./consumer.js"
+export { createConsumer, KafkaConsumer, OffsetResetStrategy } from "./consumer.js"
+
+// OffsetCommit API
+export type {
+  OffsetCommitPartitionRequest,
+  OffsetCommitPartitionResponse,
+  OffsetCommitRequest,
+  OffsetCommitResponse,
+  OffsetCommitTopicRequest,
+  OffsetCommitTopicResponse
+} from "./offset-commit.js"
+export {
+  buildOffsetCommitRequest,
+  decodeOffsetCommitResponse,
+  encodeOffsetCommitRequest
+} from "./offset-commit.js"
+
+// OffsetFetch API
+export type {
+  OffsetFetchPartitionResponse,
+  OffsetFetchRequest,
+  OffsetFetchResponse,
+  OffsetFetchTopicRequest,
+  OffsetFetchTopicResponse
+} from "./offset-fetch.js"
+export {
+  buildOffsetFetchRequest,
+  decodeOffsetFetchResponse,
+  encodeOffsetFetchRequest
+} from "./offset-fetch.js"
+
+// JoinGroup API
+export type {
+  JoinGroupMember,
+  JoinGroupProtocol,
+  JoinGroupRequest,
+  JoinGroupResponse
+} from "./join-group.js"
+export {
+  buildJoinGroupRequest,
+  decodeJoinGroupResponse,
+  encodeJoinGroupRequest
+} from "./join-group.js"
+
+// SyncGroup API
+export type { SyncGroupAssignment, SyncGroupRequest, SyncGroupResponse } from "./sync-group.js"
+export {
+  buildSyncGroupRequest,
+  decodeSyncGroupResponse,
+  encodeSyncGroupRequest
+} from "./sync-group.js"
+
+// Heartbeat API
+export type { HeartbeatRequest, HeartbeatResponse } from "./heartbeat.js"
+export {
+  buildHeartbeatRequest,
+  decodeHeartbeatResponse,
+  encodeHeartbeatRequest
+} from "./heartbeat.js"
+
+// LeaveGroup API
+export type {
+  LeaveGroupMemberRequest,
+  LeaveGroupMemberResponse,
+  LeaveGroupRequest,
+  LeaveGroupResponse
+} from "./leave-group.js"
+export {
+  buildLeaveGroupRequest,
+  decodeLeaveGroupResponse,
+  encodeLeaveGroupRequest
+} from "./leave-group.js"

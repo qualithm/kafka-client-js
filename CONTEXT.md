@@ -67,30 +67,37 @@ Registry, and Connect framework.
 | `produce.ts`          | Produce request/response codec (API key 0, v0–v9), `buildProduceRequest`, `decodeProduceResponse`                                                                                                                    |
 | `init-producer-id.ts` | InitProducerId request/response codec (API key 22, v0–v4), `buildInitProducerIdRequest`, `decodeInitProducerIdResponse`                                                                                              |
 | `producer.ts`         | `KafkaProducer` class with send, batching (linger/size), retry with exponential backoff, partitioning (murmur2/round-robin), record batch encoding, broker routing, idempotent producer (PID/epoch/sequence numbers) |
+| `offset-commit.ts`    | OffsetCommit request/response codec (API key 8, v0–v8), group offset management, flexible versioning (v8+)                                                                                                           |
+| `offset-fetch.ts`     | OffsetFetch request/response codec (API key 9, v0–v8), fetch committed offsets, nullable topics (v7+), leader epoch (v5+)                                                                                            |
+| `join-group.ts`       | JoinGroup request/response codec (API key 11, v0–v9), consumer group coordination protocol, rebalance timeout, static membership (v5+)                                                                               |
+| `sync-group.ts`       | SyncGroup request/response codec (API key 14, v0–v5), partition assignment distribution, protocol type negotiation (v5+)                                                                                             |
+| `heartbeat.ts`        | Heartbeat request/response codec (API key 12, v0–v4), group session keepalive, rebalance detection                                                                                                                   |
+| `leave-group.ts`      | LeaveGroup request/response codec (API key 13, v0–v5), individual member leave, batch member leave (v3+), leave reason (v5+)                                                                                         |
+| `consumer.ts`         | KafkaConsumer class with group coordination, partition assignment, offset management, rebalance listener, auto-commit, offset reset strategies (earliest/latest/none), range assignor                                |
 | `bun-socket.ts`       | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                                                                                                           |
 | `node-socket.ts`      | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling                                                                                                                           |
 | `deno-socket.ts`      | Deno runtime socket adapter via `Deno.connect()`, TCP and TLS support                                                                                                                                                |
 
 ### Features
 
-| Feature          | Status      | Notes                                                                                                                                                                                       |
-| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                                                                                                            |
-| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                                                                                                                  |
-| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                                                                                                |
-| Producer         | Complete    | Produce codec, KafkaProducer class with send/partitioning/record batch encoding/batching/retries/idempotent (PID, epoch, sequence numbers)                                                  |
-| Consumer         | Not started |                                                                                                                                                                                             |
-| Consumer Groups  | Not started |                                                                                                                                                                                             |
-| Admin Client     | Not started |                                                                                                                                                                                             |
-| Protocol Layer   | In progress | ApiVersions (v0–v3), Metadata (v0–v12), Fetch (v0–v13), Produce (v0–v9), InitProducerId (v0–v4) complete                                                                                    |
-| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                                                                                                                |
-| Connection       | Complete    | Socket adapter interface, single-broker connection with correlation and timeouts, Bun/Node.js/Deno runtime adapters, broker discovery from metadata, connection pool with per-broker limits |
-| Connection Pool  | Complete    | Per-broker pooling, idle/active tracking, waiter queue, metadata refresh                                                                                                                    |
-| API Design       | Partial     | `Kafka` class, `createKafka()` factory, connect/disconnect lifecycle, `producer()` factory method; consumer/admin not started                                                               |
-| SASL Auth        | Not started |                                                                                                                                                                                             |
-| SSL/TLS          | Not started |                                                                                                                                                                                             |
-| Serialization    | Not started |                                                                                                                                                                                             |
-| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                                                                                                                    |
+| Feature          | Status      | Notes                                                                                                                                                                                                   |
+| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                                                                                                                        |
+| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                                                                                                                              |
+| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                                                                                                            |
+| Producer         | Complete    | Produce codec, KafkaProducer class with send/partitioning/record batch encoding/batching/retries/idempotent (PID, epoch, sequence numbers)                                                              |
+| Consumer         | Complete    | OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup codecs; KafkaConsumer class with group coordination, offset management, rebalance listener, auto-commit, offset reset strategies |
+| Consumer Groups  | Complete    | Consumer group protocol (JoinGroup then SyncGroup then Heartbeat then Fetch then OffsetCommit then LeaveGroup), range partition assignor, rebalance listener pattern                                    |
+| Protocol Layer   | Complete    | ApiVersions, Metadata, Fetch, Produce, InitProducerId, OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, FindCoordinator, ListOffsets all complete                                |
+| Admin Client     | Not started |                                                                                                                                                                                                         |
+| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                                                                                                                            |
+| Connection       | Complete    | Socket adapter interface, single-broker connection with correlation and timeouts, Bun/Node.js/Deno runtime adapters, broker discovery from metadata, connection pool with per-broker limits             |
+| Connection Pool  | Complete    | Per-broker pooling, idle/active tracking, waiter queue, metadata refresh                                                                                                                                |
+| API Design       | Partial     | `Kafka` class, `createKafka()` factory, connect/disconnect lifecycle, `producer()` and `consumer()` factory methods; admin not started                                                                  |
+| SASL Auth        | Not started |                                                                                                                                                                                                         |
+| SSL/TLS          | Not started |                                                                                                                                                                                                         |
+| Serialization    | Not started |                                                                                                                                                                                                         |
+| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                                                                                                                                |
 
 ### File Structure
 
@@ -120,6 +127,8 @@ Registry, and Connect framework.
 9. **Explicit resource lifecycle** — User controls producer/consumer connect/disconnect; no implicit
    reconnection without opt-in
 10. **Property-based testing** — Use fast-check for protocol edge cases and chunk reassembly
+11. **Schema Registry built-in** — Ship in this package with pluggable providers (like compression);
+    users only pay for what they import
 
 ---
 
@@ -127,9 +136,7 @@ Registry, and Connect framework.
 
 ### Open Decisions
 
-| ID   | Question                           | Context                      |
-| ---- | ---------------------------------- | ---------------------------- |
-| OD-1 | Schema Registry integration scope? | Built-in vs separate package |
+_None._
 
 ### Risks
 
@@ -230,7 +237,7 @@ tests against a real broker; connection pool manages connect/disconnect cleanly.
 - [x] Factory function `createKafka()` alongside class constructor
 - [x] Resource lifecycle interface (connect/disconnect patterns)
 - [x] Producer factory method
-- [ ] Consumer factory method
+- [x] Consumer factory method
 - [ ] Admin client factory method
 
 ### Testing Infrastructure
@@ -256,15 +263,15 @@ from transient failures, idempotent mode prevents duplicates.
 
 ### Consumer
 
-- [ ] Fetch request/response decoding
-- [ ] Subscribe/poll loop
-- [ ] Offset commit (OffsetCommit request/response)
-- [ ] Offset reset strategies (earliest, latest, none)
-- [ ] JoinGroup request/response
-- [ ] SyncGroup request/response
-- [ ] Heartbeat request/response
-- [ ] LeaveGroup request/response
-- [ ] Rebalance listener callback support
+- [x] Fetch request/response decoding
+- [x] Subscribe/poll loop
+- [x] Offset commit (OffsetCommit request/response)
+- [x] Offset reset strategies (earliest, latest, none)
+- [x] JoinGroup request/response
+- [x] SyncGroup request/response
+- [x] Heartbeat request/response
+- [x] LeaveGroup request/response
+- [x] Rebalance listener callback support
 
 Acceptance: Consumer can subscribe, poll, commit offsets; group rebalancing works with multiple
 consumers; offset reset behaves correctly per strategy.
