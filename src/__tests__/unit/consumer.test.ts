@@ -10,6 +10,7 @@ import {
   KafkaConsumer,
   OffsetResetStrategy
 } from "../../consumer"
+import { buildRecordBatch, createRecord, encodeRecordBatch } from "../../record-batch"
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -286,6 +287,7 @@ function createJoinFlowMock(opts?: {
   assignment?: { topic: string; partitions: number[] }[]
   committedOffset?: bigint
   topics?: string[]
+  extraResponses?: Uint8Array[]
 }): { pool: ConnectionPool; conn: ReturnType<typeof createMockConnection> } {
   const memberId = opts?.memberId ?? "member-1"
   const topics = opts?.topics ?? ["test-topic"]
@@ -375,12 +377,18 @@ function createJoinFlowMock(opts?: {
 
   const allResponses =
     committedOffset >= 0n
-      ? [...joinSyncResponses, ...metadataResponses, ...offsetFetchResponses]
+      ? [
+          ...joinSyncResponses,
+          ...metadataResponses,
+          ...offsetFetchResponses,
+          ...(opts?.extraResponses ?? [])
+        ]
       : [
           ...joinSyncResponses,
           ...metadataResponses,
           ...offsetFetchResponses,
-          ...listOffsetsResponses
+          ...listOffsetsResponses,
+          ...(opts?.extraResponses ?? [])
         ]
 
   const conn = createMockConnection(allResponses)
@@ -1053,6 +1061,309 @@ describe("KafkaConsumer", () => {
       )
       consumer.subscribe(["test-topic"])
       await expect(consumer.connect()).rejects.toThrow("find coordinator failed")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // poll() with records
+  // -------------------------------------------------------------------------
+
+  describe("poll with fetch", () => {
+    function buildFetchV4Body(
+      topics: {
+        name: string
+        partitions: {
+          partitionIndex: number
+          errorCode: number
+          highWatermark: bigint
+          records: Uint8Array | null
+        }[]
+      }[]
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      // throttle_time_ms (v1+)
+      w.writeInt32(0)
+      // topics array
+      w.writeInt32(topics.length)
+      for (const t of topics) {
+        w.writeString(t.name)
+        w.writeInt32(t.partitions.length)
+        for (const p of t.partitions) {
+          w.writeInt32(p.partitionIndex)
+          w.writeInt16(p.errorCode)
+          w.writeInt64(p.highWatermark)
+          w.writeInt64(-1n) // last_stable_offset (v4+)
+          w.writeInt32(-1) // aborted_transactions: null array
+          w.writeBytes(p.records) // records
+        }
+      }
+      return w.finish()
+    }
+
+    function buildOffsetCommitV0Body(
+      topics: { name: string; partitions: { partitionIndex: number; errorCode: number }[] }[]
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(topics.length)
+      for (const t of topics) {
+        w.writeString(t.name)
+        w.writeInt32(t.partitions.length)
+        for (const p of t.partitions) {
+          w.writeInt32(p.partitionIndex)
+          w.writeInt16(p.errorCode)
+        }
+      }
+      return w.finish()
+    }
+
+    it("returns records from poll", async () => {
+      const textEncoder = new TextEncoder()
+
+      // Build a record batch with one record
+      const record = createRecord(textEncoder.encode("key1"), textEncoder.encode("value1"))
+      const batch = buildRecordBatch([record], {
+        baseOffset: 0n,
+        baseTimestamp: 1000n
+      })
+      const recordBytes = encodeRecordBatch(batch)
+
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [
+              {
+                partitionIndex: 0,
+                errorCode: 0,
+                highWatermark: 1n,
+                records: recordBytes
+              }
+            ]
+          }
+        ])
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 0n,
+        extraResponses: fetchResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 60_000 // prevent heartbeat during test
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      const records = await consumer.poll()
+
+      expect(records.length).toBe(1)
+      expect(records[0].topic).toBe("test-topic")
+      expect(records[0].partition).toBe(0)
+      expect(records[0].offset).toBe(0n)
+      expect(records[0].message.key).toEqual(textEncoder.encode("key1"))
+      expect(records[0].message.value).toEqual(textEncoder.encode("value1"))
+
+      await consumer.close()
+    })
+
+    it("handles empty fetch response", async () => {
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [
+              {
+                partitionIndex: 0,
+                errorCode: 0,
+                highWatermark: 0n,
+                records: null
+              }
+            ]
+          }
+        ])
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 0n,
+        extraResponses: fetchResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 60_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      const records = await consumer.poll()
+      expect(records.length).toBe(0)
+
+      await consumer.close()
+    })
+
+    it("handles OFFSET_OUT_OF_RANGE in fetch response", async () => {
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [
+              {
+                partitionIndex: 0,
+                errorCode: 1, // OFFSET_OUT_OF_RANGE
+                highWatermark: 0n,
+                records: null
+              }
+            ]
+          }
+        ])
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 0n,
+        extraResponses: fetchResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 60_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // poll() should not throw; it handles the error by resetting the offset
+      const records = await consumer.poll()
+      expect(records.length).toBe(0)
+
+      await consumer.close()
+    })
+
+    it("commits offsets after polling records", async () => {
+      const textEncoder = new TextEncoder()
+
+      const record = createRecord(textEncoder.encode("key1"), textEncoder.encode("value1"))
+      const batch = buildRecordBatch([record], {
+        baseOffset: 5n,
+        baseTimestamp: 1000n
+      })
+      const recordBytes = encodeRecordBatch(batch)
+
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [
+              {
+                partitionIndex: 0,
+                errorCode: 0,
+                highWatermark: 10n,
+                records: recordBytes
+              }
+            ]
+          }
+        ])
+      ]
+
+      const commitResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildOffsetCommitV0Body([
+          {
+            name: "test-topic",
+            partitions: [{ partitionIndex: 0, errorCode: 0 }]
+          }
+        ])
+      ]
+
+      const { pool, conn } = createJoinFlowMock({
+        committedOffset: 5n,
+        extraResponses: [...fetchResponses, ...commitResponses]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 60_000,
+          autoCommit: false
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      const records = await consumer.poll()
+      expect(records.length).toBe(1)
+
+      // Commit should succeed
+      await consumer.commitOffsets()
+
+      // Verify send was called for commit (join flow + fetch + commit)
+      expect(conn.send.mock.calls.length).toBeGreaterThan(10)
+
+      await consumer.close()
+    })
+
+    it("returns multiple records from a batch", async () => {
+      const textEncoder = new TextEncoder()
+
+      const batchRecords = [
+        createRecord(textEncoder.encode("k0"), textEncoder.encode("v0"), [], 0),
+        createRecord(textEncoder.encode("k1"), textEncoder.encode("v1"), [], 1),
+        createRecord(textEncoder.encode("k2"), textEncoder.encode("v2"), [], 2)
+      ]
+      const batch = buildRecordBatch(batchRecords, {
+        baseOffset: 10n,
+        baseTimestamp: 2000n
+      })
+      const recordBytes = encodeRecordBatch(batch)
+
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [
+              {
+                partitionIndex: 0,
+                errorCode: 0,
+                highWatermark: 13n,
+                records: recordBytes
+              }
+            ]
+          }
+        ])
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 10n,
+        extraResponses: fetchResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 60_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      const fetched = await consumer.poll()
+      expect(fetched.length).toBe(3)
+      expect(fetched[0].offset).toBe(10n)
+      expect(fetched[1].offset).toBe(11n)
+      expect(fetched[2].offset).toBe(12n)
+      expect(fetched[0].message.value).toEqual(textEncoder.encode("v0"))
+
+      await consumer.close()
     })
   })
 })

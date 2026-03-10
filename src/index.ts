@@ -309,3 +309,27 @@ export {
   decodeLeaveGroupResponse,
   encodeLeaveGroupRequest
 } from "./leave-group.js"
+
+// SaslHandshake API
+export type { SaslHandshakeRequest, SaslHandshakeResponse } from "./sasl-handshake.js"
+export {
+  buildSaslHandshakeRequest,
+  decodeSaslHandshakeResponse,
+  encodeSaslHandshakeRequest
+} from "./sasl-handshake.js"
+
+// SaslAuthenticate API
+export type { SaslAuthenticateRequest, SaslAuthenticateResponse } from "./sasl-authenticate.js"
+export {
+  buildSaslAuthenticateRequest,
+  decodeSaslAuthenticateResponse,
+  encodeSaslAuthenticateRequest
+} from "./sasl-authenticate.js"
+
+// SASL mechanisms
+export type { SaslAuthenticator } from "./sasl.js"
+export {
+  createPlainAuthenticator,
+  createSaslAuthenticator,
+  createScramAuthenticator
+} from "./sasl.js"

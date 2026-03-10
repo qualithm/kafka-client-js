@@ -14,12 +14,18 @@
  * @packageDocumentation
  */
 
-import type { ApiKey } from "./api-keys.js"
+import { ApiKey } from "./api-keys.js"
 import { BinaryReader } from "./binary-reader.js"
 import type { BinaryWriter } from "./binary-writer.js"
-import type { TlsConfig } from "./config.js"
+import type { SaslConfig, TlsConfig } from "./config.js"
 import { KafkaConnectionError, KafkaTimeoutError } from "./errors.js"
 import { decodeResponseHeader, frameRequest } from "./protocol-framing.js"
+import { createSaslAuthenticator } from "./sasl.js"
+import {
+  decodeSaslAuthenticateResponse,
+  encodeSaslAuthenticateRequest
+} from "./sasl-authenticate.js"
+import { decodeSaslHandshakeResponse, encodeSaslHandshakeRequest } from "./sasl-handshake.js"
 import type { KafkaSocket, SocketFactory } from "./socket.js"
 
 // ---------------------------------------------------------------------------
@@ -44,6 +50,8 @@ export type ConnectionOptions = {
   readonly connectTimeoutMs?: number
   /** Per-request timeout in milliseconds (default: 30000). */
   readonly requestTimeoutMs?: number
+  /** SASL authentication configuration. */
+  readonly sasl?: SaslConfig
 }
 
 /** @internal */
@@ -189,6 +197,7 @@ export class KafkaConnection {
   private readonly clientId: string
   private readonly socketFactory: SocketFactory
   private readonly tls?: TlsConfig
+  private readonly sasl?: SaslConfig
   private readonly connectTimeoutMs: number
   private readonly requestTimeoutMs: number
 
@@ -198,6 +207,7 @@ export class KafkaConnection {
     this.clientId = options.clientId ?? "@qualithm/kafka-client"
     this.socketFactory = options.socketFactory
     this.tls = options.tls
+    this.sasl = options.sasl
     this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
   }
@@ -332,6 +342,100 @@ export class KafkaConnection {
         )
       })
     })
+  }
+
+  /**
+   * Perform SASL authentication if configured.
+   *
+   * Must be called after `connect()` and before sending any other requests.
+   * Uses SaslHandshake (v1) to negotiate the mechanism, then SaslAuthenticate
+   * to exchange authentication tokens.
+   *
+   * @throws {KafkaConnectionError} If authentication fails.
+   */
+  async authenticate(): Promise<void> {
+    if (!this.sasl) {
+      return
+    }
+
+    const authenticator = createSaslAuthenticator(this.sasl)
+
+    // Step 1: SaslHandshake — negotiate mechanism
+    const handshakeReader = await this.send(ApiKey.SaslHandshake, 1, (writer) => {
+      encodeSaslHandshakeRequest(writer, { mechanism: authenticator.mechanism }, 1)
+    })
+
+    const handshakeResult = decodeSaslHandshakeResponse(handshakeReader, 1)
+    if (!handshakeResult.ok) {
+      throw new KafkaConnectionError(
+        `failed to decode SaslHandshake response: ${handshakeResult.error.message}`,
+        { broker: this.broker, retriable: false }
+      )
+    }
+
+    if (handshakeResult.value.errorCode !== 0) {
+      const supported = handshakeResult.value.mechanisms.join(", ")
+      throw new KafkaConnectionError(
+        `SASL mechanism '${authenticator.mechanism}' not supported by broker (error code ${String(handshakeResult.value.errorCode)}, supported: ${supported})`,
+        { broker: this.broker, retriable: false }
+      )
+    }
+
+    // Step 2: SaslAuthenticate — exchange auth tokens
+    const initialBytes = authenticator.initialAuthBytes()
+    const authReader = await this.send(ApiKey.SaslAuthenticate, 1, (writer) => {
+      encodeSaslAuthenticateRequest(writer, { authBytes: initialBytes }, 1)
+    })
+
+    const authResult = decodeSaslAuthenticateResponse(authReader, 1)
+    if (!authResult.ok) {
+      throw new KafkaConnectionError(
+        `failed to decode SaslAuthenticate response: ${authResult.error.message}`,
+        { broker: this.broker, retriable: false }
+      )
+    }
+
+    if (authResult.value.errorCode !== 0) {
+      throw new KafkaConnectionError(
+        `SASL authentication failed: ${authResult.value.errorMessage ?? "unknown error"} (error code ${String(authResult.value.errorCode)})`,
+        { broker: this.broker, retriable: false }
+      )
+    }
+
+    // For multi-step mechanisms (SCRAM), continue exchanging tokens
+    let serverBytes = authResult.value.authBytes
+    while (serverBytes && serverBytes.byteLength > 0) {
+      const nextBytes = await authenticator.stepAsync(serverBytes)
+      if (nextBytes === null) {
+        break
+      }
+
+      const stepReader = await this.send(ApiKey.SaslAuthenticate, 1, (writer) => {
+        encodeSaslAuthenticateRequest(writer, { authBytes: nextBytes }, 1)
+      })
+
+      const stepResult = decodeSaslAuthenticateResponse(stepReader, 1)
+      if (!stepResult.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode SaslAuthenticate response: ${stepResult.error.message}`,
+          { broker: this.broker, retriable: false }
+        )
+      }
+
+      if (stepResult.value.errorCode !== 0) {
+        throw new KafkaConnectionError(
+          `SASL authentication failed: ${stepResult.value.errorMessage ?? "unknown error"} (error code ${String(stepResult.value.errorCode)})`,
+          { broker: this.broker, retriable: false }
+        )
+      }
+
+      serverBytes = stepResult.value.authBytes
+    }
+
+    // Final step validation (e.g. SCRAM server signature verification)
+    if (serverBytes && serverBytes.byteLength > 0) {
+      await authenticator.stepAsync(serverBytes)
+    }
   }
 
   /**
