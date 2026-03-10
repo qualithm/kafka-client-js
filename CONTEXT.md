@@ -41,55 +41,59 @@ Registry, and Connect framework.
 
 ### Modules
 
-| Module                   | Purpose                                                                                                                                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `index.ts`               | Main entry point, barrel exports                                                                                                                                                                                                      |
-| `greet.ts`               | Greeting utility (template placeholder)                                                                                                                                                                                               |
-| `result.ts`              | `DecodeResult<T>` discriminated union and factory helpers                                                                                                                                                                             |
-| `errors.ts`              | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                                                                                                                                                     |
-| `config.ts`              | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                                                                                                                                                  |
-| `messages.ts`            | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                                                                                                                                              |
-| `api-keys.ts`            | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                                                                                                                                                         |
-| `binary-reader.ts`       | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding                                                                                                                               |
-| `binary-writer.ts`       | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                                                                                                                                           |
-| `protocol-framing.ts`    | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection                                                                                                                        |
-| `api-versions.ts`        | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse`                                                                                                                        |
-| `metadata.ts`            | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`                                                                                                                                 |
-| `find-coordinator.ts`    | FindCoordinator request/response codec (API key 10, v0–v4), `buildFindCoordinatorRequest`, `decodeFindCoordinatorResponse`                                                                                                            |
-| `list-offsets.ts`        | ListOffsets request/response codec (API key 2, v0–v7), `buildListOffsetsRequest`, `decodeListOffsetsResponse`                                                                                                                         |
-| `record-batch.ts`        | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry                                                                                                                                      |
-| `compression.ts`         | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                                                                                                                            |
-| `socket.ts`              | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                                                                                                                             |
-| `connection.ts`          | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management, SASL authentication                                                                                                               |
-| `broker-pool.ts`         | `ConnectionPool` with per-broker pooling, `discoverBrokers` for cluster discovery via Metadata API                                                                                                                                    |
-| `kafka.ts`               | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect), producer/consumer/admin factory methods                                                                                          |
-| `admin.ts`               | `KafkaAdmin` class with topic/partition management, config describe/alter, topic listing via Metadata, retry with exponential backoff, `createAdmin` factory                                                                          |
-| `create-topics.ts`       | CreateTopics request/response codec (API key 19, v0–v7), `buildCreateTopicsRequest`, `decodeCreateTopicsResponse`                                                                                                                     |
-| `delete-topics.ts`       | DeleteTopics request/response codec (API key 20, v0–v6), `buildDeleteTopicsRequest`, `decodeDeleteTopicsResponse`                                                                                                                     |
-| `create-partitions.ts`   | CreatePartitions request/response codec (API key 37, v0–v3), `buildCreatePartitionsRequest`, `decodeCreatePartitionsResponse`                                                                                                         |
-| `describe-configs.ts`    | DescribeConfigs request/response codec (API key 32, v0–v4), `buildDescribeConfigsRequest`, `decodeDescribeConfigsResponse`, `ConfigResourceType`                                                                                      |
-| `alter-configs.ts`       | AlterConfigs request/response codec (API key 33, v0–v2), `buildAlterConfigsRequest`, `decodeAlterConfigsResponse`, non-incremental config set                                                                                         |
-| `fetch.ts`               | Fetch request/response codec (API key 1, v0–v13), `buildFetchRequest`, `decodeFetchResponse`                                                                                                                                          |
-| `produce.ts`             | Produce request/response codec (API key 0, v0–v9), `buildProduceRequest`, `decodeProduceResponse`                                                                                                                                     |
-| `init-producer-id.ts`    | InitProducerId request/response codec (API key 22, v0–v4), `buildInitProducerIdRequest`, `decodeInitProducerIdResponse`                                                                                                               |
-| `producer.ts`            | `KafkaProducer` class with send, batching (linger/size), retry with exponential backoff, partitioning (murmur2/round-robin), record batch encoding, broker routing, idempotent producer (PID/epoch/sequence numbers)                  |
-| `offset-commit.ts`       | OffsetCommit request/response codec (API key 8, v0–v8), group offset management, flexible versioning (v8+)                                                                                                                            |
-| `offset-fetch.ts`        | OffsetFetch request/response codec (API key 9, v0–v8), fetch committed offsets, nullable topics (v7+), leader epoch (v5+)                                                                                                             |
-| `join-group.ts`          | JoinGroup request/response codec (API key 11, v0–v9), consumer group coordination protocol, rebalance timeout, static membership (v5+)                                                                                                |
-| `sync-group.ts`          | SyncGroup request/response codec (API key 14, v0–v5), partition assignment distribution, protocol type negotiation (v5+)                                                                                                              |
-| `heartbeat.ts`           | Heartbeat request/response codec (API key 12, v0–v4), group session keepalive, rebalance detection                                                                                                                                    |
-| `leave-group.ts`         | LeaveGroup request/response codec (API key 13, v0–v5), individual member leave, batch member leave (v3+), leave reason (v5+)                                                                                                          |
-| `consumer.ts`            | KafkaConsumer class with group coordination, partition assignment, offset management, rebalance listener, auto-commit, offset reset strategies (earliest/latest/none), range assignor                                                 |
-| `sasl-handshake.ts`      | SaslHandshake request/response codec (API key 17, v0–v1), `buildSaslHandshakeRequest`, `decodeSaslHandshakeResponse`                                                                                                                  |
-| `sasl-authenticate.ts`   | SaslAuthenticate request/response codec (API key 36, v0–v2), `buildSaslAuthenticateRequest`, `decodeSaslAuthenticateResponse`                                                                                                         |
-| `sasl.ts`                | SASL mechanism implementations: PLAIN (RFC 4616), SCRAM-SHA-256/512 (RFC 5802), `SaslAuthenticator` type, `createSaslAuthenticator` factory                                                                                           |
-| `bun-socket.ts`          | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                                                                                                                            |
-| `node-socket.ts`         | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling                                                                                                                                            |
-| `deno-socket.ts`         | Deno runtime socket adapter via `Deno.connect()`, TCP and TLS support                                                                                                                                                                 |
-| `serialization.ts`       | `Serializer<T>`, `Deserializer<T>`, `Serde<T>` sync types; `AsyncSerializer<T>`, `AsyncDeserializer<T>`, `AsyncSerde<T>` async types for Schema Registry; built-in `stringSerializer` (UTF-8) and `jsonSerializer<T>()` factory       |
-| `schema-registry.ts`     | Confluent Schema Registry HTTP client, schema caching by ID and subject, Confluent wire format encode/decode, `SchemaRegistryError`, subject naming strategies (`topicNameStrategy`, `recordNameStrategy`, `topicRecordNameStrategy`) |
-| `avro-serializer.ts`     | Avro serializer/deserializer with Schema Registry integration, pluggable `AvroCodec` interface, Confluent wire format, `createAvroSerde<T>()` factory                                                                                 |
-| `protobuf-serializer.ts` | Protobuf serializer/deserializer with Schema Registry integration, pluggable `ProtobufCodec` interface, Confluent wire format with message index encoding, `createProtobufSerde<T>()` factory                                         |
+| Module                     | Purpose                                                                                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`                 | Main entry point, barrel exports                                                                                                                                                                                                      |
+| `result.ts`                | `DecodeResult<T>` discriminated union and factory helpers                                                                                                                                                                             |
+| `errors.ts`                | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                                                                                                                                                     |
+| `config.ts`                | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                                                                                                                                                  |
+| `messages.ts`              | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                                                                                                                                              |
+| `api-keys.ts`              | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                                                                                                                                                         |
+| `binary-reader.ts`         | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding                                                                                                                               |
+| `binary-writer.ts`         | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                                                                                                                                           |
+| `protocol-framing.ts`      | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection                                                                                                                        |
+| `api-versions.ts`          | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse`                                                                                                                        |
+| `metadata.ts`              | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`                                                                                                                                 |
+| `find-coordinator.ts`      | FindCoordinator request/response codec (API key 10, v0–v4), `buildFindCoordinatorRequest`, `decodeFindCoordinatorResponse`                                                                                                            |
+| `list-offsets.ts`          | ListOffsets request/response codec (API key 2, v0–v7), `buildListOffsetsRequest`, `decodeListOffsetsResponse`                                                                                                                         |
+| `record-batch.ts`          | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry                                                                                                                                      |
+| `compression.ts`           | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                                                                                                                            |
+| `socket.ts`                | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                                                                                                                             |
+| `connection.ts`            | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management, SASL authentication                                                                                                               |
+| `broker-pool.ts`           | `ConnectionPool` with per-broker pooling, `discoverBrokers` for cluster discovery via Metadata API, opt-in auto-reconnection with `ReconnectStrategy`                                                                                 |
+| `kafka.ts`                 | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect), producer/consumer/admin factory methods                                                                                          |
+| `admin.ts`                 | `KafkaAdmin` class with topic/partition management, config describe/alter, topic listing via Metadata, retry with exponential backoff, `createAdmin` factory                                                                          |
+| `create-topics.ts`         | CreateTopics request/response codec (API key 19, v0–v7), `buildCreateTopicsRequest`, `decodeCreateTopicsResponse`                                                                                                                     |
+| `delete-topics.ts`         | DeleteTopics request/response codec (API key 20, v0–v6), `buildDeleteTopicsRequest`, `decodeDeleteTopicsResponse`                                                                                                                     |
+| `create-partitions.ts`     | CreatePartitions request/response codec (API key 37, v0–v3), `buildCreatePartitionsRequest`, `decodeCreatePartitionsResponse`                                                                                                         |
+| `describe-configs.ts`      | DescribeConfigs request/response codec (API key 32, v0–v4), `buildDescribeConfigsRequest`, `decodeDescribeConfigsResponse`, `ConfigResourceType`                                                                                      |
+| `alter-configs.ts`         | AlterConfigs request/response codec (API key 33, v0–v2), `buildAlterConfigsRequest`, `decodeAlterConfigsResponse`, non-incremental config set                                                                                         |
+| `fetch.ts`                 | Fetch request/response codec (API key 1, v0–v13), `buildFetchRequest`, `decodeFetchResponse`                                                                                                                                          |
+| `produce.ts`               | Produce request/response codec (API key 0, v0–v9), `buildProduceRequest`, `decodeProduceResponse`                                                                                                                                     |
+| `init-producer-id.ts`      | InitProducerId request/response codec (API key 22, v0–v4), `buildInitProducerIdRequest`, `decodeInitProducerIdResponse`                                                                                                               |
+| `producer.ts`              | `KafkaProducer` class with send, batching (linger/size), retry with exponential backoff, partitioning (murmur2/round-robin), record batch encoding, broker routing, idempotent producer (PID/epoch/sequence numbers)                  |
+| `offset-commit.ts`         | OffsetCommit request/response codec (API key 8, v0–v8), group offset management, flexible versioning (v8+)                                                                                                                            |
+| `offset-fetch.ts`          | OffsetFetch request/response codec (API key 9, v0–v8), fetch committed offsets, nullable topics (v7+), leader epoch (v5+)                                                                                                             |
+| `join-group.ts`            | JoinGroup request/response codec (API key 11, v0–v9), consumer group coordination protocol, rebalance timeout, static membership (v5+)                                                                                                |
+| `sync-group.ts`            | SyncGroup request/response codec (API key 14, v0–v5), partition assignment distribution, protocol type negotiation (v5+)                                                                                                              |
+| `heartbeat.ts`             | Heartbeat request/response codec (API key 12, v0–v4), group session keepalive, rebalance detection                                                                                                                                    |
+| `leave-group.ts`           | LeaveGroup request/response codec (API key 13, v0–v5), individual member leave, batch member leave (v3+), leave reason (v5+)                                                                                                          |
+| `consumer.ts`              | KafkaConsumer class with group coordination, partition assignment, offset management, rebalance listener, auto-commit, offset reset strategies (earliest/latest/none), pluggable partition assignors                                  |
+| `sasl-handshake.ts`        | SaslHandshake request/response codec (API key 17, v0–v1), `buildSaslHandshakeRequest`, `decodeSaslHandshakeResponse`                                                                                                                  |
+| `sasl-authenticate.ts`     | SaslAuthenticate request/response codec (API key 36, v0–v2), `buildSaslAuthenticateRequest`, `decodeSaslAuthenticateResponse`                                                                                                         |
+| `sasl.ts`                  | SASL mechanism implementations: PLAIN (RFC 4616), SCRAM-SHA-256/512 (RFC 5802), `SaslAuthenticator` type, `createSaslAuthenticator` factory                                                                                           |
+| `bun-socket.ts`            | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                                                                                                                            |
+| `node-socket.ts`           | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling                                                                                                                                            |
+| `deno-socket.ts`           | Deno runtime socket adapter via `Deno.connect()`, TCP and TLS support                                                                                                                                                                 |
+| `serialization.ts`         | `Serializer<T>`, `Deserializer<T>`, `Serde<T>` sync types; `AsyncSerializer<T>`, `AsyncDeserializer<T>`, `AsyncSerde<T>` async types for Schema Registry; built-in `stringSerializer` (UTF-8) and `jsonSerializer<T>()` factory       |
+| `schema-registry.ts`       | Confluent Schema Registry HTTP client, schema caching by ID and subject, Confluent wire format encode/decode, `SchemaRegistryError`, subject naming strategies (`topicNameStrategy`, `recordNameStrategy`, `topicRecordNameStrategy`) |
+| `avro-serializer.ts`       | Avro serializer/deserializer with Schema Registry integration, pluggable `AvroCodec` interface, Confluent wire format, `createAvroSerde<T>()` factory                                                                                 |
+| `protobuf-serializer.ts`   | Protobuf serializer/deserializer with Schema Registry integration, pluggable `ProtobufCodec` interface, Confluent wire format with message index encoding, `createProtobufSerde<T>()` factory                                         |
+| `add-partitions-to-txn.ts` | AddPartitionsToTxn request/response codec (API key 24, v0–v3), `buildAddPartitionsToTxnRequest`, `decodeAddPartitionsToTxnResponse`                                                                                                   |
+| `add-offsets-to-txn.ts`    | AddOffsetsToTxn request/response codec (API key 25, v0–v3), `buildAddOffsetsToTxnRequest`, `decodeAddOffsetsToTxnResponse`                                                                                                            |
+| `end-txn.ts`               | EndTxn request/response codec (API key 26, v0–v3), `buildEndTxnRequest`, `decodeEndTxnResponse`                                                                                                                                       |
+| `txn-offset-commit.ts`     | TxnOffsetCommit request/response codec (API key 28, v0–v3), `buildTxnOffsetCommitRequest`, `decodeTxnOffsetCommitResponse`                                                                                                            |
+| `assignors.ts`             | Partition assignor strategies: `rangeAssignor`, `roundRobinAssignor`, `createCooperativeStickyAssignor()`, `PartitionAssignor` interface                                                                                              |
 
 ### Features
 
@@ -100,17 +104,20 @@ Registry, and Connect framework.
 | Protocol Framing | Complete | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                                                                                                                                                                                           |
 | Producer         | Complete | Produce codec, KafkaProducer class with send/partitioning/record batch encoding/batching/retries/idempotent (PID, epoch, sequence numbers)                                                                                                                                             |
 | Consumer         | Complete | OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup codecs; KafkaConsumer class with group coordination, offset management, rebalance listener, auto-commit, offset reset strategies                                                                                |
-| Consumer Groups  | Complete | Consumer group protocol (JoinGroup then SyncGroup then Heartbeat then Fetch then OffsetCommit then LeaveGroup), range partition assignor, rebalance listener pattern                                                                                                                   |
+| Consumer Groups  | Complete | Consumer group protocol (JoinGroup then SyncGroup then Heartbeat then Fetch then OffsetCommit then LeaveGroup), pluggable partition assignors (range, round-robin, cooperative sticky), rebalance listener pattern                                                                     |
 | Protocol Layer   | Complete | ApiVersions, Metadata, Fetch, Produce, InitProducerId, OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, FindCoordinator, ListOffsets, SaslHandshake, SaslAuthenticate, CreateTopics, DeleteTopics, CreatePartitions, DescribeConfigs, AlterConfigs all complete |
 | Admin Client     | Complete | CreateTopics, DeleteTopics, CreatePartitions, DescribeConfigs, AlterConfigs codecs; KafkaAdmin class with retry, listTopics/describeTopics via Metadata                                                                                                                                |
 | Record Batches   | Complete | RecordBatch v2, Record codec, CRC-32C, all compression types                                                                                                                                                                                                                           |
 | Connection       | Complete | Socket adapter interface, single-broker connection with correlation and timeouts, Bun/Node.js/Deno runtime adapters, broker discovery from metadata, connection pool with per-broker limits                                                                                            |
-| Connection Pool  | Complete | Per-broker pooling, idle/active tracking, waiter queue, metadata refresh                                                                                                                                                                                                               |
+| Connection Pool  | Complete | Per-broker pooling, idle/active tracking, waiter queue, metadata refresh, opt-in auto-reconnection with exponential backoff                                                                                                                                                            |
 | API Design       | Complete | `Kafka` class, `createKafka()` factory, connect/disconnect lifecycle, `producer()`, `consumer()`, and `admin()` factory methods                                                                                                                                                        |
 | SASL Auth        | Complete | SaslHandshake/SaslAuthenticate codecs, PLAIN/SCRAM-SHA-256/SCRAM-SHA-512 mechanisms, connection-level `authenticate()` method                                                                                                                                                          |
 | SSL/TLS          | Complete | TlsConfig type, Bun/Node.js/Deno adapters handle TLS natively, mTLS support, rejectUnauthorised option                                                                                                                                                                                 |
 | Serialization    | Complete | Serializer/Deserializer/Serde sync and async types, built-in string and JSON serializers, Schema Registry client, Avro serializer (pluggable codec), Protobuf serializer (pluggable codec), Confluent wire format                                                                      |
 | Compression      | Complete | gzip, snappy (Xerial), lz4 (frame), zstd                                                                                                                                                                                                                                               |
+| Transactions     | Partial  | AddPartitionsToTxn, AddOffsetsToTxn, EndTxn, TxnOffsetCommit codecs; transactional producer not yet implemented                                                                                                                                                                        |
+| Assignors        | Complete | Range, round-robin, and cooperative sticky partition assignors; pluggable `PartitionAssignor` interface in consumer                                                                                                                                                                    |
+| Auto-Reconnect   | Complete | Opt-in `ReconnectStrategy` with exponential backoff in `ConnectionPool`; disabled by default per Locked Decision #9                                                                                                                                                                    |
 | Testing          | Complete | Property-based tests (fast-check) for protocol framing and chunk reassembly, spec reference annotations (`@see` Kafka protocol spec), integration test harness (docker-compose with KRaft broker)                                                                                      |
 
 ### File Structure
@@ -315,6 +322,66 @@ consumers; offset reset behaves correctly per strategy.
 - [x] Schema Registry client (HTTP, caching, subject naming strategies)
 - [x] Avro serializer (pluggable AvroCodec, Confluent wire format)
 - [x] Protobuf serializer (pluggable ProtobufCodec, Confluent wire format, message indexes)
+
+### Template Cleanup
+
+- [x] Remove `src/greet.ts` and `src/__tests__/unit/greet.test.ts`
+- [x] Remove `greet.ts` entry from CONTEXT.md Modules table
+- [x] Rewrite `bench/index.ts` to benchmark Kafka operations (binary codec, record batches)
+- [x] Fix TypeDoc `navigationLinks` GitHub URL (points to `npm-example`)
+- [x] Fix `examples/README.md` descriptions to match actual example content
+- [x] Remove `coverage/` directory (gitignored build artefact checked in)
+
+Acceptance: No references to `greet` in source code, benchmarks exercise real Kafka codecs, TypeDoc
+links point to correct repository.
+
+### Documentation
+
+- [x] Expand README with feature overview, API usage examples, and architecture summary
+- [x] Add produce/consume end-to-end example in `examples/`
+- [ ] Generate TypeDoc and verify output
+
+Acceptance: README has quick-start code snippets for producer, consumer, and admin. Examples are
+runnable.
+
+### Package Publishing Preparation
+
+- [ ] Verify `package.json` exports, files, and metadata
+- [ ] Verify build produces correct `dist/` output
+- [ ] Verify `prepublishOnly` hook works end-to-end
+
+Acceptance: `bun run build` succeeds, `dist/` contains `.js` and `.d.ts` files, package metadata is
+correct.
+
+### Transactions
+
+- [x] AddPartitionsToTxn request/response codec (API key 24, v0–v4)
+- [x] AddOffsetsToTxn request/response codec (API key 25, v0–v3)
+- [x] EndTxn request/response codec (API key 26, v0–v3)
+- [x] TxnOffsetCommit request/response codec (API key 28, v0–v3)
+- [ ] Transactional producer support in `KafkaProducer`
+
+Acceptance: Transaction codecs round-trip correctly, transactional producer can begin/commit/abort
+transactions.
+
+### Cooperative Sticky Assignor
+
+- [x] Implement cooperative sticky partition assignment strategy
+- [x] Support incremental rebalancing (COOPERATIVE protocol)
+- [x] Add assignor to consumer options
+
+Acceptance: Consumer supports `cooperativeSticky` assignor, incremental rebalances avoid
+stop-the-world.
+
+### Opt-in Auto-Reconnection
+
+- [x] Reconnection strategy interface (backoff, max retries)
+- [x] Connection-level reconnect on disconnect
+- [x] Pool-level reconnection coordination
+- [x] Consumer/producer transparent retry on connection loss
+
+Acceptance: Clients can opt in to automatic reconnection with configurable backoff; disabled by
+default per Locked Decision #9.
 
 ---
 

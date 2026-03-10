@@ -8,6 +8,6 @@
   "excludeExternals": true,
   "includeVersion": true,
   "navigationLinks": {
-    "GitHub": "https://github.com/qualithm/npm-example"
+    "GitHub": "https://github.com/qualithm/kafka-client-js"
   }
 }

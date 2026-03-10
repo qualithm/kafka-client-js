@@ -13,6 +13,7 @@
 
 import { ApiKey, negotiateVersion } from "./api-keys.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "./api-versions.js"
+import { type PartitionAssignor, rangeAssignor } from "./assignors.js"
 import { BinaryReader } from "./binary-reader.js"
 import { BinaryWriter } from "./binary-writer.js"
 import type { ConnectionPool } from "./broker-pool.js"
@@ -148,6 +149,8 @@ export type ConsumerOptions = {
   readonly rebalanceListener?: RebalanceListener
   /** Group instance ID for static membership (KIP-345). Null for dynamic. */
   readonly groupInstanceId?: string | null
+  /** Partition assignor strategy. @default rangeAssignor */
+  readonly assignor?: PartitionAssignor
   /** Retry configuration. */
   readonly retry?: ConsumerRetryConfig
 }
@@ -351,6 +354,7 @@ export class KafkaConsumer {
   private readonly isolationLevel: FetchIsolationLevel
   private readonly rebalanceListener: RebalanceListener
   private readonly groupInstanceId: string | null
+  private readonly assignor: PartitionAssignor
   private maxRetries!: number
   private initialRetryMs!: number
   private maxRetryMs!: number
@@ -390,6 +394,7 @@ export class KafkaConsumer {
     this.isolationLevel = options.isolationLevel ?? FetchIsolationLevel.ReadUncommitted
     this.rebalanceListener = options.rebalanceListener ?? {}
     this.groupInstanceId = options.groupInstanceId ?? null
+    this.assignor = options.assignor ?? rangeAssignor
     this.initRetryOptions(options.retry)
   }
 
@@ -622,7 +627,7 @@ export class KafkaConsumer {
         memberId: this.memberId,
         groupInstanceId: this.groupInstanceId,
         protocolType: "consumer",
-        protocols: [{ name: "range", metadata }]
+        protocols: [{ name: this.assignor.name, metadata }]
       }
 
       const joinReader = await conn.send(ApiKey.JoinGroup, joinGroupVersion, (writer) => {
@@ -725,44 +730,35 @@ export class KafkaConsumer {
   }
 
   /**
-   * Assign partitions as group leader using a simple range strategy.
+   * Assign partitions as group leader using the configured assignor strategy.
    */
   private assignPartitions(joinResponse: JoinGroupResponse): SyncGroupAssignment[] {
-    const memberIds = joinResponse.members.map((m) => m.memberId).sort()
-
-    // Collect all partitions from subscribed topics using metadata
-    // The leader needs to know topic partition counts
-    const topicPartitions = new Map<string, number[]>()
-    for (const topic of this.subscribedTopics) {
-      // Use the assignments known from the pool's metadata
-      topicPartitions.set(topic, [])
-    }
-
-    // We'll discover partition counts in fetchInitialOffsets via metadata
-    // For now, build assignments from member metadata
-    const assignments = new Map<string, { topic: string; partitions: number[] }[]>()
-    for (const id of memberIds) {
-      assignments.set(id, [])
-    }
-
-    // Range assignor: for each topic, divide partitions among members
-    // We need partition counts — extract from member metadata
+    // Build member subscriptions from JoinGroup metadata
+    const members: { memberId: string; topics: string[] }[] = []
     for (const member of joinResponse.members) {
       const memberMeta = decodeConsumerProtocolMemberMetadata(member.metadata)
-      for (const topic of memberMeta.topics) {
-        if (!topicPartitions.has(topic)) {
-          topicPartitions.set(topic, [])
+      members.push({ memberId: member.memberId, topics: memberMeta.topics })
+    }
+
+    // Collect partition counts from pool metadata (may be empty)
+    const partitionCounts = new Map<string, number>()
+    for (const member of members) {
+      for (const topic of member.topics) {
+        if (!partitionCounts.has(topic)) {
+          partitionCounts.set(topic, 0)
         }
       }
     }
 
-    // Build the sync assignments — initially empty, we'll fill in
-    // after we know partition counts. For the initial implementation,
-    // we use a placeholder approach where we assign known partitions.
-    // full partition discovery happens in fetchInitialOffsets.
-    return memberIds.map((id) => ({
-      memberId: id,
-      assignment: encodeConsumerProtocolAssignment(assignments.get(id) ?? [])
+    // Run the assignor
+    const assignorResult = this.assignor.assign(members, partitionCounts)
+
+    // Encode assignments for SyncGroup
+    return assignorResult.map((a) => ({
+      memberId: a.memberId,
+      assignment: encodeConsumerProtocolAssignment(
+        a.topicPartitions.map((tp) => ({ topic: tp.topic, partitions: [...tp.partitions] }))
+      )
     }))
   }
 

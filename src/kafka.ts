@@ -9,7 +9,12 @@
  */
 
 import { type AdminOptions, type AdminRetryConfig, KafkaAdmin } from "./admin.js"
-import { type BrokerInfo, ConnectionPool, type ConnectionPoolOptions } from "./broker-pool.js"
+import {
+  type BrokerInfo,
+  ConnectionPool,
+  type ConnectionPoolOptions,
+  type ReconnectStrategy
+} from "./broker-pool.js"
 import { type BrokerAddress, type KafkaConfig, parseBrokerAddress } from "./config.js"
 import {
   type ConsumerOptions,
@@ -141,6 +146,11 @@ export type KafkaOptions = {
   readonly socketFactory: SocketFactory
   /** Maximum connections per broker (default: 1). */
   readonly maxConnectionsPerBroker?: number
+  /**
+   * Opt-in reconnection strategy. When set, the pool replaces dead connections
+   * in the background with exponential backoff. Disabled by default.
+   */
+  readonly reconnect?: ReconnectStrategy
 }
 
 /**
@@ -227,7 +237,8 @@ export class Kafka {
       tls: options.config.tls,
       connectTimeoutMs: options.config.connectionTimeoutMs,
       requestTimeoutMs: options.config.requestTimeoutMs,
-      maxConnectionsPerBroker: options.maxConnectionsPerBroker
+      maxConnectionsPerBroker: options.maxConnectionsPerBroker,
+      reconnect: options.reconnect
     }
   }
 

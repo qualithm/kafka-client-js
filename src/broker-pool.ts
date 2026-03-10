@@ -41,6 +41,24 @@ export type BrokerInfo = {
 }
 
 /**
+ * Opt-in auto-reconnection strategy.
+ *
+ * When enabled, the connection pool will attempt to replace dead connections
+ * in the background using exponential backoff. Disabled by default per the
+ * explicit resource lifecycle principle.
+ */
+export type ReconnectStrategy = {
+  /** Maximum number of reconnection attempts per dead connection (default: 5). */
+  readonly maxRetries?: number
+  /** Initial delay in milliseconds before the first reconnect attempt (default: 250). */
+  readonly initialDelayMs?: number
+  /** Maximum delay in milliseconds between reconnect attempts (default: 30000). */
+  readonly maxDelayMs?: number
+  /** Backoff multiplier applied after each failed attempt (default: 2). */
+  readonly multiplier?: number
+}
+
+/**
  * Options for the {@link ConnectionPool}.
  */
 export type ConnectionPoolOptions = {
@@ -58,6 +76,11 @@ export type ConnectionPoolOptions = {
   readonly requestTimeoutMs?: number
   /** Maximum number of connections per broker (default: 1). */
   readonly maxConnectionsPerBroker?: number
+  /**
+   * Opt-in reconnection strategy. When set, the pool replaces dead connections
+   * in the background with exponential backoff. Disabled by default.
+   */
+  readonly reconnect?: ReconnectStrategy
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +88,18 @@ export type ConnectionPoolOptions = {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_CONNECTIONS_PER_BROKER = 1
+const DEFAULT_RECONNECT_MAX_RETRIES = 5
+const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 250
+const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000
+const DEFAULT_RECONNECT_MULTIPLIER = 2
+
+/** @internal */
+type ResolvedReconnectStrategy = {
+  readonly maxRetries: number
+  readonly initialDelayMs: number
+  readonly maxDelayMs: number
+  readonly multiplier: number
+}
 
 // ---------------------------------------------------------------------------
 // Broker discovery
@@ -228,6 +263,7 @@ export class ConnectionPool {
   private readonly pools = new Map<string, PoolEntry>()
   private readonly knownBrokers = new Map<number, BrokerInfo>()
   private closed = false
+  private readonly reconnecting = new Set<string>() // brokerKey tracking in-flight reconnects
 
   private readonly bootstrapBrokers: readonly BrokerAddress[]
   private readonly socketFactory: SocketFactory
@@ -236,6 +272,7 @@ export class ConnectionPool {
   private readonly connectTimeoutMs?: number
   private readonly requestTimeoutMs?: number
   private readonly maxConnectionsPerBroker: number
+  private readonly reconnect?: ResolvedReconnectStrategy
 
   constructor(options: ConnectionPoolOptions) {
     this.bootstrapBrokers = options.bootstrapBrokers
@@ -246,6 +283,14 @@ export class ConnectionPool {
     this.requestTimeoutMs = options.requestTimeoutMs
     this.maxConnectionsPerBroker =
       options.maxConnectionsPerBroker ?? DEFAULT_MAX_CONNECTIONS_PER_BROKER
+    if (options.reconnect) {
+      this.reconnect = {
+        maxRetries: options.reconnect.maxRetries ?? DEFAULT_RECONNECT_MAX_RETRIES,
+        initialDelayMs: options.reconnect.initialDelayMs ?? DEFAULT_RECONNECT_INITIAL_DELAY_MS,
+        maxDelayMs: options.reconnect.maxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS,
+        multiplier: options.reconnect.multiplier ?? DEFAULT_RECONNECT_MULTIPLIER
+      }
+    }
   }
 
   /** Whether the pool has been closed. */
@@ -420,6 +465,10 @@ export class ConnectionPool {
     if (!conn.connected) {
       // Connection is dead — wake a waiter so it can create a new one
       this.wakeWaiter(entry, conn.host, conn.port)
+      // Optionally start background reconnection to replenish the pool
+      if (this.reconnect && !this.closed) {
+        this.backgroundReconnect(entry, conn.host, conn.port)
+      }
       return
     }
 
@@ -520,6 +569,75 @@ export class ConnectionPool {
         )
       }
     )
+  }
+
+  /**
+   * Attempt to create a fresh connection in the background with exponential backoff.
+   * The new connection is added to the idle list on success. If all retries fail
+   * the attempt is silently abandoned — the next getConnection() call will create
+   * a fresh connection as usual.
+   */
+  private backgroundReconnect(entry: PoolEntry, host: string, port: number): void {
+    const key = brokerKey(host, port)
+
+    // Avoid duplicate reconnect loops for the same broker
+    if (this.reconnecting.has(key)) {
+      return
+    }
+    this.reconnecting.add(key)
+
+    const strategy = this.reconnect
+    if (!strategy) {
+      return
+    }
+    let attempt = 0
+
+    const tryReconnect = (): void => {
+      if (this.closed) {
+        this.reconnecting.delete(key)
+        return
+      }
+
+      attempt++
+      const conn = this.createConnection(host, port)
+      conn.connect().then(
+        () => {
+          this.reconnecting.delete(key)
+          if (this.closed) {
+            // Pool closed while we were reconnecting
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
+            conn.close().catch(() => {})
+            return
+          }
+
+          // Give to a waiter if one is pending, otherwise add to idle
+          if (entry.waiters.length > 0) {
+            const waiter = entry.waiters.shift()
+            if (waiter) {
+              entry.active.add(conn)
+              waiter.resolve(conn)
+              return
+            }
+          }
+          entry.idle.push(conn)
+        },
+        () => {
+          if (this.closed || attempt >= strategy.maxRetries) {
+            this.reconnecting.delete(key)
+            return
+          }
+
+          const delay = Math.min(
+            strategy.initialDelayMs * strategy.multiplier ** (attempt - 1),
+            strategy.maxDelayMs
+          )
+          setTimeout(tryReconnect, delay)
+        }
+      )
+    }
+
+    // Start first attempt after initialDelayMs
+    setTimeout(tryReconnect, strategy.initialDelayMs)
   }
 }
 

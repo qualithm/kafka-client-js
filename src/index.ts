@@ -209,7 +209,7 @@ export type { ConnectionOptions } from "./connection.js"
 export { KafkaConnection } from "./connection.js"
 
 // Broker pool & discovery
-export type { BrokerInfo, ConnectionPoolOptions } from "./broker-pool.js"
+export type { BrokerInfo, ConnectionPoolOptions, ReconnectStrategy } from "./broker-pool.js"
 export { ConnectionPool, discoverBrokers } from "./broker-pool.js"
 
 // Kafka client
@@ -230,6 +230,10 @@ export {
   KafkaProducer,
   roundRobinPartitioner
 } from "./producer.js"
+
+// Partition assignors
+export type { MemberAssignment, MemberSubscription, PartitionAssignor } from "./assignors.js"
+export { createCooperativeStickyAssignor, rangeAssignor, roundRobinAssignor } from "./assignors.js"
 
 // Consumer
 export type {
@@ -449,3 +453,44 @@ export { createAvroSerde } from "./avro-serializer.js"
 // Protobuf serializer
 export type { ProtobufCodec, ProtobufSchema, ProtobufSerdeOptions } from "./protobuf-serializer.js"
 export { createProtobufSerde } from "./protobuf-serializer.js"
+
+// AddPartitionsToTxn API
+export type {
+  AddPartitionsToTxnPartitionResult,
+  AddPartitionsToTxnRequest,
+  AddPartitionsToTxnResponse,
+  AddPartitionsToTxnTopic,
+  AddPartitionsToTxnTopicResult
+} from "./add-partitions-to-txn.js"
+export {
+  buildAddPartitionsToTxnRequest,
+  decodeAddPartitionsToTxnResponse,
+  encodeAddPartitionsToTxnRequest
+} from "./add-partitions-to-txn.js"
+
+// AddOffsetsToTxn API
+export type { AddOffsetsToTxnRequest, AddOffsetsToTxnResponse } from "./add-offsets-to-txn.js"
+export {
+  buildAddOffsetsToTxnRequest,
+  decodeAddOffsetsToTxnResponse,
+  encodeAddOffsetsToTxnRequest
+} from "./add-offsets-to-txn.js"
+
+// EndTxn API
+export type { EndTxnRequest, EndTxnResponse } from "./end-txn.js"
+export { buildEndTxnRequest, decodeEndTxnResponse, encodeEndTxnRequest } from "./end-txn.js"
+
+// TxnOffsetCommit API
+export type {
+  TxnOffsetCommitPartitionRequest,
+  TxnOffsetCommitPartitionResponse,
+  TxnOffsetCommitRequest,
+  TxnOffsetCommitResponse,
+  TxnOffsetCommitTopicRequest,
+  TxnOffsetCommitTopicResponse
+} from "./txn-offset-commit.js"
+export {
+  buildTxnOffsetCommitRequest,
+  decodeTxnOffsetCommitResponse,
+  encodeTxnOffsetCommitRequest
+} from "./txn-offset-commit.js"

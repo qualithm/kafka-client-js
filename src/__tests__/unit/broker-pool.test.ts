@@ -979,4 +979,125 @@ describe("ConnectionPool", () => {
       expect(pool.connectionCount("localhost", 9092)).toBe(2)
     })
   })
+
+  describe("auto-reconnection", () => {
+    it("does not reconnect when reconnect is not configured", async () => {
+      const mock = createSimpleSocketFactory()
+      pool = new ConnectionPool({
+        ...defaultPoolOptions(mock.factory),
+        bootstrapBrokers: [],
+        maxConnectionsPerBroker: 2
+      })
+
+      const conn = await pool.getConnection("localhost", 9092)
+      expect(pool.connectionCount("localhost", 9092)).toBe(1)
+
+      // Simulate socket close so connection is dead
+      mock.callbacks?.onClose()
+
+      pool.releaseConnection(conn)
+
+      // Dead connection is removed — no reconnection attempted
+      expect(pool.connectionCount("localhost", 9092)).toBe(0)
+
+      // Wait a bit to ensure no background reconnect
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50)
+      })
+      expect(pool.connectionCount("localhost", 9092)).toBe(0)
+    })
+
+    it("replenishes pool in background when reconnect is configured", async () => {
+      const mock = createSimpleSocketFactory()
+      pool = new ConnectionPool({
+        ...defaultPoolOptions(mock.factory),
+        bootstrapBrokers: [],
+        maxConnectionsPerBroker: 2,
+        reconnect: { initialDelayMs: 10, maxRetries: 3, multiplier: 1 }
+      })
+
+      const conn = await pool.getConnection("localhost", 9092)
+      expect(pool.connectionCount("localhost", 9092)).toBe(1)
+
+      // Simulate socket close so connection is dead
+      mock.callbacks?.onClose()
+
+      pool.releaseConnection(conn)
+
+      // Dead connection removed immediately
+      expect(pool.connectionCount("localhost", 9092)).toBe(0)
+
+      // Wait for background reconnect (initial delay 10ms + connect time)
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100)
+      })
+      expect(pool.connectionCount("localhost", 9092)).toBe(1)
+    })
+
+    it("does not reconnect after pool is closed", async () => {
+      const mock = createSimpleSocketFactory()
+      pool = new ConnectionPool({
+        ...defaultPoolOptions(mock.factory),
+        bootstrapBrokers: [],
+        maxConnectionsPerBroker: 2,
+        reconnect: { initialDelayMs: 50, maxRetries: 3 }
+      })
+
+      const conn = await pool.getConnection("localhost", 9092)
+      mock.callbacks?.onClose()
+      pool.releaseConnection(conn)
+
+      // Close pool before reconnect fires
+      await pool.close()
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 150)
+      })
+
+      // Pool is closed, no new connections
+      expect(pool.connectionCount("localhost", 9092)).toBe(0)
+    })
+
+    it("gives reconnected connection to waiting caller", async () => {
+      let connectCount = 0
+      // eslint-disable-next-line @typescript-eslint/require-await
+      const factory: SocketFactory = async (_options) => {
+        connectCount++
+        const socket: KafkaSocket = {
+          // eslint-disable-next-line @typescript-eslint/require-await
+          write: async (data) => {
+            void data
+          },
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
+          close: async () => {}
+        }
+        return socket
+      }
+
+      pool = new ConnectionPool({
+        ...defaultPoolOptions(factory),
+        bootstrapBrokers: [],
+        maxConnectionsPerBroker: 1,
+        reconnect: { initialDelayMs: 10, maxRetries: 3, multiplier: 1 }
+      })
+
+      const conn = await pool.getConnection("localhost", 9092)
+      expect(connectCount).toBe(1)
+
+      // Request another connection — will be queued since max is 1
+      const waiterPromise = pool.getConnection("localhost", 9092)
+
+      // Simulate the current connection dying
+      // Access through connection internals: close the connection
+      await conn.close()
+      pool.releaseConnection(conn)
+
+      // The waiter should be woken with a new connection (from wakeWaiter, not reconnect)
+      const newConn = await waiterPromise
+      expect(newConn.connected).toBe(true)
+      expect(connectCount).toBe(2)
+
+      pool.releaseConnection(newConn)
+    })
+  })
 })

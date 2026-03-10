@@ -122,7 +122,11 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.CreatePartitions]: { minVersion: 0, maxVersion: 3 },
   [ApiKey.DescribeConfigs]: { minVersion: 0, maxVersion: 4 },
   [ApiKey.AlterConfigs]: { minVersion: 0, maxVersion: 2 },
-  [ApiKey.InitProducerId]: { minVersion: 0, maxVersion: 4 }
+  [ApiKey.InitProducerId]: { minVersion: 0, maxVersion: 4 },
+  [ApiKey.AddPartitionsToTxn]: { minVersion: 0, maxVersion: 3 },
+  [ApiKey.AddOffsetsToTxn]: { minVersion: 0, maxVersion: 3 },
+  [ApiKey.EndTxn]: { minVersion: 0, maxVersion: 3 },
+  [ApiKey.TxnOffsetCommit]: { minVersion: 0, maxVersion: 3 }
 }
 
 /**
@@ -151,7 +155,11 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.CreatePartitions]: 2,
   [ApiKey.DescribeConfigs]: 4,
   [ApiKey.AlterConfigs]: 2,
-  [ApiKey.InitProducerId]: 2
+  [ApiKey.InitProducerId]: 2,
+  [ApiKey.AddPartitionsToTxn]: 3,
+  [ApiKey.AddOffsetsToTxn]: 3,
+  [ApiKey.EndTxn]: 3,
+  [ApiKey.TxnOffsetCommit]: 3
 }
 
 /**
