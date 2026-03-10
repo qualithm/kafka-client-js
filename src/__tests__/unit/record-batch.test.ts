@@ -1,3 +1,10 @@
+/**
+ * RecordBatch v2 (magic=2) encoding/decoding tests.
+ *
+ * @see https://kafka.apache.org/documentation/#recordbatch — RecordBatch format
+ * @see https://kafka.apache.org/documentation/#record — Record format
+ */
+
 import fc from "fast-check"
 import { beforeAll, describe, expect, it } from "vitest"
 

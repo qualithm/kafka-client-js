@@ -111,6 +111,7 @@ Registry, and Connect framework.
 | SSL/TLS          | Complete | TlsConfig type, Bun/Node.js/Deno adapters handle TLS natively, mTLS support, rejectUnauthorised option                                                                                                                                                                                 |
 | Serialization    | Complete | Serializer/Deserializer/Serde sync and async types, built-in string and JSON serializers, Schema Registry client, Avro serializer (pluggable codec), Protobuf serializer (pluggable codec), Confluent wire format                                                                      |
 | Compression      | Complete | gzip, snappy (Xerial), lz4 (frame), zstd                                                                                                                                                                                                                                               |
+| Testing          | Complete | Property-based tests (fast-check) for protocol framing and chunk reassembly, spec reference annotations (`@see` Kafka protocol spec), integration test harness (docker-compose with KRaft broker)                                                                                      |
 
 ### File Structure
 
@@ -255,9 +256,9 @@ tests against a real broker; connection pool manages connect/disconnect cleanly.
 
 ### Testing Infrastructure
 
-- [ ] Property-based testing setup with fast-check
-- [ ] Spec section reference pattern for tests
-- [ ] Integration test harness (testcontainers or docker-compose for broker)
+- [x] Property-based testing setup with fast-check
+- [x] Spec section reference pattern for tests
+- [x] Integration test harness (docker-compose for broker)
 
 Acceptance: `bun test` runs unit + property tests; integration tests can spin up a Kafka broker and
 run basic produce/consume.
@@ -328,3 +329,4 @@ consumers; offset reset behaves correctly per strategy.
 | 2026-03-10 | Producer batching with async metadata fetch requires tracking in-flight accumulations (`pendingEnqueues` set) so `flush()` waits for messages to be accumulated before draining; otherwise `flush()` races with `send()` and finds an empty accumulator                  |
 | 2026-03-10 | Web Crypto API in TypeScript ES2023 lib rejects `Uint8Array<ArrayBufferLike>` as `BufferSource` — use `.buffer.slice(offset, end) as ArrayBuffer` helper to extract a plain `ArrayBuffer` before passing to `crypto.subtle.importKey` / `deriveBits` / `sign` / `digest` |
 | 2026-03-10 | Schema Registry `register()` caches the schema by ID, so subsequent `getSchema()` calls for the same ID (e.g. during deserialization) are served from cache without an HTTP round-trip; test expectations should account for this                                        |
+| 2026-03-11 | fast-check v4 removed `fc.char()`; use `fc.string({ minLength, maxLength })` instead of `fc.stringOf(fc.char(), ...)` for arbitrary string generation                                                                                                                    |

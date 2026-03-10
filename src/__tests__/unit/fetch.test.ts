@@ -1,3 +1,9 @@
+/**
+ * Fetch (API key 1) request/response tests.
+ *
+ * @see https://kafka.apache.org/protocol.html#The_Messages_Fetch
+ */
+
 import { describe, expect, it } from "vitest"
 
 import { ApiKey } from "../../api-keys"

@@ -1,3 +1,9 @@
+/**
+ * ApiVersions (API key 18) request/response tests.
+ *
+ * @see https://kafka.apache.org/protocol.html#The_Messages_ApiVersions
+ */
+
 import { describe, expect, it } from "vitest"
 
 import { ApiKey } from "../../api-keys"
