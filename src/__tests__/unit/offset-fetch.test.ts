@@ -320,6 +320,138 @@ describe("decodeOffsetFetchResponse", () => {
     })
   })
 
+  describe("v6 — flexible format response", () => {
+    function buildResponseV6(
+      throttleTimeMs: number,
+      topics: {
+        name: string
+        partitions: {
+          partitionIndex: number
+          committedOffset: bigint
+          committedLeaderEpoch: number
+          metadata: string | null
+          errorCode: number
+        }[]
+      }[],
+      errorCode: number
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(throttleTimeMs)
+      // topics (compact array: length+1)
+      w.writeUnsignedVarInt(topics.length + 1)
+      for (const topic of topics) {
+        w.writeCompactString(topic.name)
+        // partitions (compact array: length+1)
+        w.writeUnsignedVarInt(topic.partitions.length + 1)
+        for (const p of topic.partitions) {
+          w.writeInt32(p.partitionIndex)
+          w.writeInt64(p.committedOffset)
+          w.writeInt32(p.committedLeaderEpoch) // v5+ leader epoch
+          w.writeCompactString(p.metadata) // compact nullable metadata
+          w.writeInt16(p.errorCode)
+          w.writeUnsignedVarInt(0) // partition tagged fields
+        }
+        w.writeUnsignedVarInt(0) // topic tagged fields
+      }
+      w.writeInt16(errorCode) // top-level error code (v3+)
+      w.writeUnsignedVarInt(0) // response tagged fields
+      return w.finish()
+    }
+
+    it("decodes flexible format with compact strings and tagged fields", () => {
+      const body = buildResponseV6(
+        50,
+        [
+          {
+            name: "topic-a",
+            partitions: [
+              {
+                partitionIndex: 0,
+                committedOffset: 100n,
+                committedLeaderEpoch: 5,
+                metadata: "meta-v6",
+                errorCode: 0
+              }
+            ]
+          }
+        ],
+        0
+      )
+      const reader = new BinaryReader(body)
+      const result = decodeOffsetFetchResponse(reader, 6)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.throttleTimeMs).toBe(50)
+      expect(result.value.errorCode).toBe(0)
+      expect(result.value.topics).toHaveLength(1)
+      expect(result.value.topics[0].name).toBe("topic-a")
+      expect(result.value.topics[0].partitions[0].committedOffset).toBe(100n)
+      expect(result.value.topics[0].partitions[0].committedLeaderEpoch).toBe(5)
+      expect(result.value.topics[0].partitions[0].metadata).toBe("meta-v6")
+    })
+
+    it("decodes v6 with null metadata and multiple partitions", () => {
+      const body = buildResponseV6(
+        0,
+        [
+          {
+            name: "t1",
+            partitions: [
+              {
+                partitionIndex: 0,
+                committedOffset: 42n,
+                committedLeaderEpoch: -1,
+                metadata: null,
+                errorCode: 0
+              },
+              {
+                partitionIndex: 1,
+                committedOffset: -1n,
+                committedLeaderEpoch: -1,
+                metadata: null,
+                errorCode: 0
+              }
+            ]
+          }
+        ],
+        0
+      )
+      const reader = new BinaryReader(body)
+      const result = decodeOffsetFetchResponse(reader, 6)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.topics[0].partitions).toHaveLength(2)
+      expect(result.value.topics[0].partitions[0].committedOffset).toBe(42n)
+      expect(result.value.topics[0].partitions[1].committedOffset).toBe(-1n)
+    })
+  })
+
+  describe("v6 — flexible request encoding", () => {
+    it("encodes with compact strings and tagged fields", () => {
+      const writer = new BinaryWriter()
+      const request: OffsetFetchRequest = {
+        groupId: "compact-group",
+        topics: [{ name: "t1", partitionIndexes: [0, 1] }]
+      }
+      encodeOffsetFetchRequest(writer, request, 6)
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+
+      // group_id (compact string)
+      const groupResult = reader.readCompactString()
+      expect(groupResult.ok).toBe(true)
+      expect(groupResult.ok && groupResult.value).toBe("compact-group")
+    })
+  })
+
   describe("error handling", () => {
     it("returns failure on truncated input", () => {
       const reader = new BinaryReader(new Uint8Array(2))

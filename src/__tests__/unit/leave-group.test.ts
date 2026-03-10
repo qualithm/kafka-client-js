@@ -275,6 +275,65 @@ describe("decodeLeaveGroupResponse", () => {
     })
   })
 
+  describe("v4 — flexible format response with members", () => {
+    function buildResponseV4(
+      throttleTimeMs: number,
+      errorCode: number,
+      members: { memberId: string; groupInstanceId: string | null; errorCode: number }[]
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(throttleTimeMs)
+      w.writeInt16(errorCode)
+      // members (compact array: length+1)
+      w.writeUnsignedVarInt(members.length + 1)
+      for (const m of members) {
+        w.writeCompactString(m.memberId)
+        w.writeCompactString(m.groupInstanceId)
+        w.writeInt16(m.errorCode)
+        w.writeUnsignedVarInt(0) // member tagged fields
+      }
+      // response tagged fields
+      w.writeUnsignedVarInt(0)
+      return w.finish()
+    }
+
+    it("decodes flexible format with compact strings and tagged fields", () => {
+      const body = buildResponseV4(50, 0, [
+        { memberId: "m-0", groupInstanceId: null, errorCode: 0 },
+        { memberId: "m-1", groupInstanceId: "inst-1", errorCode: 0 }
+      ])
+      const reader = new BinaryReader(body)
+      const result = decodeLeaveGroupResponse(reader, 4)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.throttleTimeMs).toBe(50)
+      expect(result.value.errorCode).toBe(0)
+      expect(result.value.members).toHaveLength(2)
+      expect(result.value.members[0].memberId).toBe("m-0")
+      expect(result.value.members[0].groupInstanceId).toBe(null)
+      expect(result.value.members[1].groupInstanceId).toBe("inst-1")
+    })
+
+    it("decodes per-member error in flexible format", () => {
+      const body = buildResponseV4(0, 0, [
+        { memberId: "m-0", groupInstanceId: null, errorCode: 25 }
+      ])
+      const reader = new BinaryReader(body)
+      const result = decodeLeaveGroupResponse(reader, 4)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.members[0].errorCode).toBe(25)
+    })
+  })
+
   describe("error handling", () => {
     it("returns failure on truncated input", () => {
       const reader = new BinaryReader(new Uint8Array(1))

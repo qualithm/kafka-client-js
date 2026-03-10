@@ -210,6 +210,80 @@ describe("decodeSyncGroupResponse", () => {
     })
   })
 
+  describe("v4 — flexible encoding with compact bytes and tagged fields", () => {
+    it("decodes a v4 response with compact assignment and tagged fields", () => {
+      const assignment = new Uint8Array([0x01, 0x02, 0x03])
+      const w = new BinaryWriter()
+      w.writeInt32(50) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      // assignment (compact bytes: length+1 as varint, then data)
+      w.writeCompactBytes(assignment)
+      // tagged fields (empty)
+      w.writeUnsignedVarInt(0)
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeSyncGroupResponse(reader, 4)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.throttleTimeMs).toBe(50)
+      expect(result.value.errorCode).toBe(0)
+      expect(result.value.assignment).toEqual(assignment)
+      expect(result.value.protocolType).toBe(null)
+      expect(result.value.protocolName).toBe(null)
+    })
+  })
+
+  describe("v5 — with protocol_type and protocol_name", () => {
+    it("decodes protocol_type and protocol_name compact strings", () => {
+      const assignment = new Uint8Array([0xab])
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeCompactString("consumer") // protocol_type (v5+)
+      w.writeCompactString("range") // protocol_name (v5+)
+      w.writeCompactBytes(assignment) // assignment (compact bytes)
+      w.writeUnsignedVarInt(0) // tagged fields
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeSyncGroupResponse(reader, 5)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.protocolType).toBe("consumer")
+      expect(result.value.protocolName).toBe("range")
+      expect(result.value.assignment).toEqual(assignment)
+    })
+  })
+
+  describe("v4 — flexible request encoding with assignments", () => {
+    it("encodes assignments with compact strings and bytes", () => {
+      const writer = new BinaryWriter()
+      const assignment = new Uint8Array([0xde, 0xad])
+      const request: SyncGroupRequest = {
+        groupId: "flex-group",
+        generationId: 5,
+        memberId: "m-1",
+        groupInstanceId: null,
+        assignments: [{ memberId: "m-1", assignment }]
+      }
+      encodeSyncGroupRequest(writer, request, 4)
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+
+      // group_id (compact string)
+      const groupResult = reader.readCompactString()
+      expect(groupResult.ok).toBe(true)
+      expect(groupResult.ok && groupResult.value).toBe("flex-group")
+    })
+  })
+
   describe("error handling", () => {
     it("returns failure on truncated input", () => {
       const reader = new BinaryReader(new Uint8Array(1))

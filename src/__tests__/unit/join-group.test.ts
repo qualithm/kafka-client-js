@@ -253,6 +253,110 @@ describe("decodeJoinGroupResponse", () => {
     })
   })
 
+  describe("v6 — flexible response decoding", () => {
+    function buildResponseV6(
+      throttleTimeMs: number,
+      errorCode: number,
+      generationId: number,
+      protocolName: string,
+      leader: string,
+      memberId: string,
+      members: { memberId: string; metadata: Uint8Array }[]
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(throttleTimeMs)
+      w.writeInt16(errorCode)
+      w.writeInt32(generationId)
+      // protocol_name (compact string, v6+)
+      w.writeCompactString(protocolName)
+      // leader (compact string)
+      w.writeCompactString(leader)
+      // member_id (compact string)
+      w.writeCompactString(memberId)
+      // members (compact array: length+1)
+      w.writeUnsignedVarInt(members.length + 1)
+      for (const m of members) {
+        w.writeCompactString(m.memberId)
+        // no group_instance_id in v6 without v5 flag, but v6 > v5 so include it
+        w.writeCompactString(null) // group_instance_id (nullable)
+        w.writeCompactBytes(m.metadata)
+        w.writeUnsignedVarInt(0) // member tagged fields
+      }
+      // response tagged fields
+      w.writeUnsignedVarInt(0)
+      return w.finish()
+    }
+
+    it("decodes flexible format with compact strings and arrays", () => {
+      const meta = new Uint8Array([0x01, 0x02])
+      const body = buildResponseV6(0, 0, 2, "range", "member-0", "member-0", [
+        { memberId: "member-0", metadata: meta }
+      ])
+      const reader = new BinaryReader(body)
+      const result = decodeJoinGroupResponse(reader, 6)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.errorCode).toBe(0)
+      expect(result.value.generationId).toBe(2)
+      expect(result.value.protocolName).toBe("range")
+      expect(result.value.leader).toBe("member-0")
+      expect(result.value.memberId).toBe("member-0")
+      expect(result.value.members).toHaveLength(1)
+      expect(result.value.members[0].memberId).toBe("member-0")
+      expect(result.value.members[0].metadata).toEqual(meta)
+    })
+
+    it("decodes v6 response with empty members array", () => {
+      const body = buildResponseV6(100, 0, 3, "roundrobin", "leader-1", "member-1", [])
+      const reader = new BinaryReader(body)
+      const result = decodeJoinGroupResponse(reader, 6)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.throttleTimeMs).toBe(100)
+      expect(result.value.members).toHaveLength(0)
+    })
+  })
+
+  describe("v7 — with protocol_type", () => {
+    it("decodes protocol_type compact string", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeInt32(1) // generation_id
+      // protocol_type (v7+, compact string)
+      w.writeCompactString("consumer")
+      // protocol_name (compact string)
+      w.writeCompactString("range")
+      // leader (compact string)
+      w.writeCompactString("leader-1")
+      // member_id (compact string)
+      w.writeCompactString("member-1")
+      // members (compact array, empty)
+      w.writeUnsignedVarInt(1) // 0 members + 1
+      // response tagged fields
+      w.writeUnsignedVarInt(0)
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeJoinGroupResponse(reader, 7)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.protocolType).toBe("consumer")
+      expect(result.value.protocolName).toBe("range")
+    })
+  })
+
   describe("error handling", () => {
     it("returns failure on truncated input", () => {
       const reader = new BinaryReader(new Uint8Array(2))

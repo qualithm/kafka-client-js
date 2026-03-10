@@ -200,6 +200,43 @@ describe("decodeHeartbeatResponse", () => {
     })
   })
 
+  describe("v4 — flexible format with tagged fields", () => {
+    it("decodes a v4 response with tagged fields", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(75) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUnsignedVarInt(0) // empty tagged fields
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeHeartbeatResponse(reader, 4)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.throttleTimeMs).toBe(75)
+      expect(result.value.errorCode).toBe(0)
+    })
+
+    it("decodes a v4 error response", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(27) // REBALANCE_IN_PROGRESS
+      w.writeUnsignedVarInt(0) // tagged fields
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeHeartbeatResponse(reader, 4)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+
+      expect(result.value.errorCode).toBe(27)
+    })
+  })
+
   describe("error handling", () => {
     it("returns failure on truncated input", () => {
       const reader = new BinaryReader(new Uint8Array(1))
