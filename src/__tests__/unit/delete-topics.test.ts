@@ -336,4 +336,46 @@ describe("decodeDeleteTopicsResponse", () => {
     expect(result.value.topics[0].errorCode).toBe(0)
     expect(result.value.topics[1].errorCode).toBe(3)
   })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(1))
+      const result = decodeDeleteTopicsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v4 flexible response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // topics (1+1)
+      writer.writeCompactString("trunc-topic")
+      // Missing error_code and tagged fields
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeDeleteTopicsResponse(reader, 4)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v5 error message", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // topics (1+1)
+      writer.writeCompactString("trunc-topic")
+      writer.writeInt16(41) // error_code
+      // Missing error_message (v5+)
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeDeleteTopicsResponse(reader, 5)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v6 topic_id", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // topics (1+1)
+      writer.writeCompactString("trunc-topic")
+      // Missing 16-byte topic_id (v6+)
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeDeleteTopicsResponse(reader, 6)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

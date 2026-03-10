@@ -451,4 +451,50 @@ describe("decodeDescribeConfigsResponse", () => {
     expect(config.value).toBeNull()
     expect(config.isSensitive).toBe(true)
   })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeDescribeConfigsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v4 flexible response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // resources (1+1)
+      writer.writeInt16(0) // error_code
+      writer.writeCompactString(null) // error_message
+      writer.writeInt8(2) // resource_type
+      writer.writeCompactString("trunc-topic")
+      writer.writeUnsignedVarInt(2) // configs (1+1)
+      writer.writeCompactString("key")
+      // Missing value and remaining fields
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeDescribeConfigsResponse(reader, 4)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v1 synonym", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeInt32(1) // resources
+      writer.writeInt16(0) // error_code
+      writer.writeString(null) // error_message
+      writer.writeInt8(2) // Topic
+      writer.writeString("syn-topic")
+      writer.writeInt32(1) // configs
+      writer.writeString("retention.ms")
+      writer.writeString("86400000")
+      writer.writeBoolean(false) // read_only
+      writer.writeInt8(1) // config_source
+      writer.writeBoolean(false) // is_sensitive
+      writer.writeInt32(1) // synonyms (1)
+      writer.writeString("retention.ms")
+      // Missing synonym value and source
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeDescribeConfigsResponse(reader, 1)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

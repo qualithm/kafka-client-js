@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 
+import { KafkaAdmin } from "../../admin"
 import { ApiKey } from "../../api-keys"
 import { BinaryWriter } from "../../binary-writer"
+import { KafkaConsumer } from "../../consumer"
 import { KafkaConfigError, KafkaConnectionError } from "../../errors"
 import { createKafka, Kafka, type KafkaOptions } from "../../kafka"
 import { KafkaProducer } from "../../producer"
@@ -441,6 +443,39 @@ describe("Kafka", () => {
       expect(producer).toBeInstanceOf(KafkaProducer)
       await producer.close()
       await kafka.disconnect()
+    })
+  })
+
+  describe("consumer", () => {
+    it("should create a KafkaConsumer when connected", async () => {
+      const kafka = new Kafka(defaultOptions())
+      await kafka.connect()
+      const consumer = kafka.consumer({ groupId: "test-group" })
+      expect(consumer).toBeInstanceOf(KafkaConsumer)
+      await consumer.close()
+      await kafka.disconnect()
+    })
+
+    it("should throw when not connected", () => {
+      const kafka = new Kafka(defaultOptions())
+      expect(() => kafka.consumer({ groupId: "test-group" })).toThrow(KafkaConnectionError)
+    })
+  })
+
+  describe("admin", () => {
+    it("should create a KafkaAdmin when connected", async () => {
+      const kafka = new Kafka(defaultOptions())
+      await kafka.connect()
+      const admin = kafka.admin()
+      expect(admin).toBeDefined()
+      expect(admin).toBeInstanceOf(KafkaAdmin)
+      admin.close()
+      await kafka.disconnect()
+    })
+
+    it("should throw when not connected", () => {
+      const kafka = new Kafka(defaultOptions())
+      expect(() => kafka.admin()).toThrow(KafkaConnectionError)
     })
   })
 })

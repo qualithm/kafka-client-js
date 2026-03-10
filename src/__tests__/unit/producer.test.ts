@@ -1227,6 +1227,64 @@ describe("KafkaProducer send (integration path)", () => {
     expect(error).toBeInstanceOf(KafkaProtocolError)
     expect((error as KafkaProtocolError).retriable).toBe(false)
   })
+
+  it("treats DUPLICATE_SEQUENCE_NUMBER (45) as non-retriable", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "dup-seq",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "dup-seq",
+          partitions: [{ partitionIndex: 0, errorCode: 45, baseOffset: 0n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({ connectionPool: pool })
+    const error = await producer
+      .send("dup-seq", [{ key: null, value: encoder.encode("x") }])
+      .catch((e: unknown) => e as KafkaProtocolError)
+
+    expect(error).toBeInstanceOf(KafkaProtocolError)
+    expect((error as KafkaProtocolError).retriable).toBe(false)
+  })
+
+  it("treats OUT_OF_ORDER_SEQUENCE_NUMBER (46) as retriable", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "ooo-seq",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "ooo-seq",
+          partitions: [{ partitionIndex: 0, errorCode: 46, baseOffset: 0n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({ connectionPool: pool })
+    const error = await producer
+      .send("ooo-seq", [{ key: null, value: encoder.encode("x") }])
+      .catch((e: unknown) => e as KafkaProtocolError)
+
+    expect(error).toBeInstanceOf(KafkaProtocolError)
+    expect((error as KafkaProtocolError).retriable).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------

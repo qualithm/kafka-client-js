@@ -314,4 +314,25 @@ describe("decodeAlterConfigsResponse", () => {
     expect(result.value.resources[1].resourceName).toBe("0")
     expect(result.value.resources[1].resourceType).toBe(4)
   })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeAlterConfigsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v2 flexible response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // resources (1+1)
+      writer.writeInt16(0) // error_code
+      writer.writeCompactString(null) // error_message
+      writer.writeInt8(2) // resource_type
+      // Missing resource_name and tagged fields
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeAlterConfigsResponse(reader, 2)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

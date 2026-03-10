@@ -760,6 +760,139 @@ describe("KafkaConsumer", () => {
       expect(consumer.partitions).toHaveLength(1)
       await consumer.close()
     })
+
+    it("handles leader with truncated member metadata gracefully", async () => {
+      // Build a join flow where member metadata is truncated (just 1 byte)
+      const truncatedMetadata = new Uint8Array([0x00])
+      const assignmentBytes = buildConsumerProtocolAssignment([
+        { topic: "test-topic", partitions: [0] }
+      ])
+      const memberId = "leader-trunc"
+
+      const allResponses = [
+        // FindCoordinator
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        // JoinGroup — leader receives members with truncated metadata
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(0, 1, "range", memberId, memberId, [
+          { memberId, metadata: truncatedMetadata }
+        ]),
+        // SyncGroup
+        buildApiVersionsBody(STANDARD_APIS),
+        buildSyncGroupV0Body(0, assignmentBytes),
+        // Metadata (refreshTopicMetadata)
+        buildApiVersionsBody(STANDARD_APIS),
+        buildMetadataV1Body(
+          [{ nodeId: 1, host: "localhost", port: 9092 }],
+          [
+            {
+              errorCode: 0,
+              name: "test-topic",
+              isInternal: false,
+              partitions: [
+                { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+              ]
+            }
+          ]
+        ),
+        // OffsetFetch
+        buildApiVersionsBody(STANDARD_APIS),
+        buildOffsetFetchV0Body([
+          {
+            name: "test-topic",
+            partitions: [{ partitionIndex: 0, committedOffset: 10n, metadata: null, errorCode: 0 }]
+          }
+        ])
+      ]
+
+      const conn = createMockConnection(allResponses)
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // Should succeed despite truncated metadata (graceful degradation)
+      expect(consumer.partitions).toHaveLength(1)
+      await consumer.close()
+    })
+
+    it("handles leader with empty member metadata gracefully", async () => {
+      const emptyMetadata = new Uint8Array(0)
+      const assignmentBytes = buildConsumerProtocolAssignment([
+        { topic: "test-topic", partitions: [0] }
+      ])
+      const memberId = "leader-empty"
+
+      const allResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(0, 1, "range", memberId, memberId, [
+          { memberId, metadata: emptyMetadata }
+        ]),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildSyncGroupV0Body(0, assignmentBytes),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildMetadataV1Body(
+          [{ nodeId: 1, host: "localhost", port: 9092 }],
+          [
+            {
+              errorCode: 0,
+              name: "test-topic",
+              isInternal: false,
+              partitions: [
+                { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+              ]
+            }
+          ]
+        ),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildOffsetFetchV0Body([
+          {
+            name: "test-topic",
+            partitions: [{ partitionIndex: 0, committedOffset: 10n, metadata: null, errorCode: 0 }]
+          }
+        ])
+      ]
+
+      const conn = createMockConnection(allResponses)
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      expect(consumer.partitions).toHaveLength(1)
+      await consumer.close()
+    })
   })
 
   // -------------------------------------------------------------------------

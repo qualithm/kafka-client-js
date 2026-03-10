@@ -363,5 +363,68 @@ describe("decodeJoinGroupResponse", () => {
       const result = decodeJoinGroupResponse(reader, 2)
       expect(result.ok).toBe(false)
     })
+    it("returns failure on truncated v6 member metadata", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeInt32(1) // generation_id
+      w.writeCompactString("range") // protocol_name
+      w.writeCompactString("leader-0") // leader
+      w.writeCompactString("member-0") // member_id
+      w.writeUnsignedVarInt(2) // members (1+1)
+      w.writeCompactString("member-0") // member_id
+      w.writeCompactString(null) // group_instance_id
+      // Missing metadata bytes
+      const reader = new BinaryReader(w.finish())
+      const result = decodeJoinGroupResponse(reader, 6)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v5 group_instance_id", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeInt32(1) // generation_id
+      w.writeCompactString("range") // protocol_name
+      w.writeCompactString("leader-0") // leader
+      w.writeCompactString("member-0") // member_id
+      w.writeUnsignedVarInt(2) // members (1+1)
+      w.writeCompactString("member-0") // member_id
+      // Missing group_instance_id (v5+)
+      const reader = new BinaryReader(w.finish())
+      const result = decodeJoinGroupResponse(reader, 6)
+      expect(result.ok).toBe(false)
+    })
+  })
+
+  describe("v7 — protocol_type and protocol_name", () => {
+    it("decodes response with protocol_type and protocol_name", () => {
+      const meta = new Uint8Array([0x01])
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeInt32(5) // generation_id
+      w.writeCompactString("consumer") // protocol_type (v7+)
+      w.writeCompactString("range") // protocol_name
+      w.writeCompactString("leader-0") // leader
+      w.writeCompactString("member-0") // member_id
+      w.writeUnsignedVarInt(2) // members (1+1)
+      w.writeCompactString("member-0")
+      w.writeCompactString(null) // group_instance_id
+      w.writeCompactBytes(meta)
+      w.writeUnsignedVarInt(0) // member tagged fields
+      w.writeUnsignedVarInt(0) // response tagged fields
+      const reader = new BinaryReader(w.finish())
+      const result = decodeJoinGroupResponse(reader, 7)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+      expect(result.value.generationId).toBe(5)
+      expect(result.value.protocolType).toBe("consumer")
+      expect(result.value.protocolName).toBe("range")
+      expect(result.value.members[0].groupInstanceId).toBeNull()
+    })
   })
 })

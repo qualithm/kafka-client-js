@@ -554,4 +554,40 @@ describe("decodeCreateTopicsResponse", () => {
     expect(result.value.topics[1].errorCode).toBe(36)
     expect(result.value.topics[1].errorMessage).toBe("topic already exists")
   })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeCreateTopicsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v5 config entry", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // topics (1+1)
+      writer.writeCompactString("trunc-topic")
+      writer.writeInt16(0) // error_code
+      writer.writeCompactString(null) // error_message
+      writer.writeInt32(3) // num_partitions
+      writer.writeInt16(1) // replication_factor
+      writer.writeUnsignedVarInt(2) // configs (1+1)
+      writer.writeCompactString("key")
+      // Missing config value and remaining fields
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeCreateTopicsResponse(reader, 5)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v7 topic_id", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // topics (1+1)
+      writer.writeCompactString("trunc-topic")
+      // Missing 16-byte topic_id (v7+)
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeCreateTopicsResponse(reader, 7)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

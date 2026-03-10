@@ -285,4 +285,24 @@ describe("decodeCreatePartitionsResponse", () => {
     expect(result.value.topics[1].errorCode).toBe(3)
     expect(result.value.topics[1].errorMessage).toBe("unknown topic")
   })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeCreatePartitionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v2 flexible response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle
+      writer.writeUnsignedVarInt(2) // topics (1+1)
+      writer.writeCompactString("trunc-topic")
+      writer.writeInt16(0) // error_code
+      // Missing error_message and tagged fields
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeCreatePartitionsResponse(reader, 2)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

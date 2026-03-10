@@ -290,5 +290,59 @@ describe("decodeSyncGroupResponse", () => {
       const result = decodeSyncGroupResponse(reader, 0)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure on truncated v4 compact bytes", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      // Missing compact bytes (assignment)
+      const reader = new BinaryReader(w.finish())
+      const result = decodeSyncGroupResponse(reader, 4)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v5 protocol_type", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      // Missing protocol_type (v5+)
+      const reader = new BinaryReader(w.finish())
+      const result = decodeSyncGroupResponse(reader, 5)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v5 protocol_name", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeCompactString("consumer") // protocol_type
+      // Missing protocol_name (v5+)
+      const reader = new BinaryReader(w.finish())
+      const result = decodeSyncGroupResponse(reader, 5)
+      expect(result.ok).toBe(false)
+    })
+  })
+
+  describe("v5 — null protocol fields", () => {
+    it("decodes null protocol_type and protocol_name", () => {
+      const assignment = new Uint8Array([0x01, 0x02])
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeCompactString(null) // protocol_type (nullable)
+      w.writeCompactString(null) // protocol_name (nullable)
+      w.writeCompactBytes(assignment)
+      w.writeUnsignedVarInt(0) // tagged fields
+      const reader = new BinaryReader(w.finish())
+      const result = decodeSyncGroupResponse(reader, 5)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        return
+      }
+      expect(result.value.protocolType).toBeNull()
+      expect(result.value.protocolName).toBeNull()
+      expect(result.value.assignment).toEqual(assignment)
+    })
   })
 })
