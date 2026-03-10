@@ -62,7 +62,13 @@ Registry, and Connect framework.
 | `socket.ts`            | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                                                                                                            |
 | `connection.ts`        | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management, SASL authentication                                                                                              |
 | `broker-pool.ts`       | `ConnectionPool` with per-broker pooling, `discoverBrokers` for cluster discovery via Metadata API                                                                                                                   |
-| `kafka.ts`             | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect), producer factory method                                                                                         |
+| `kafka.ts`             | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect), producer/consumer/admin factory methods                                                                         |
+| `admin.ts`             | `KafkaAdmin` class with topic/partition management, config describe/alter, topic listing via Metadata, retry with exponential backoff, `createAdmin` factory                                                         |
+| `create-topics.ts`     | CreateTopics request/response codec (API key 19, v0–v7), `buildCreateTopicsRequest`, `decodeCreateTopicsResponse`                                                                                                    |
+| `delete-topics.ts`     | DeleteTopics request/response codec (API key 20, v0–v6), `buildDeleteTopicsRequest`, `decodeDeleteTopicsResponse`                                                                                                    |
+| `create-partitions.ts` | CreatePartitions request/response codec (API key 37, v0–v3), `buildCreatePartitionsRequest`, `decodeCreatePartitionsResponse`                                                                                        |
+| `describe-configs.ts`  | DescribeConfigs request/response codec (API key 32, v0–v4), `buildDescribeConfigsRequest`, `decodeDescribeConfigsResponse`, `ConfigResourceType`                                                                     |
+| `alter-configs.ts`     | AlterConfigs request/response codec (API key 33, v0–v2), `buildAlterConfigsRequest`, `decodeAlterConfigsResponse`, non-incremental config set                                                                        |
 | `fetch.ts`             | Fetch request/response codec (API key 1, v0–v13), `buildFetchRequest`, `decodeFetchResponse`                                                                                                                         |
 | `produce.ts`           | Produce request/response codec (API key 0, v0–v9), `buildProduceRequest`, `decodeProduceResponse`                                                                                                                    |
 | `init-producer-id.ts`  | InitProducerId request/response codec (API key 22, v0–v4), `buildInitProducerIdRequest`, `decodeInitProducerIdResponse`                                                                                              |
@@ -83,24 +89,24 @@ Registry, and Connect framework.
 
 ### Features
 
-| Feature          | Status      | Notes                                                                                                                                                                                                     |
-| ---------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                                                                                                                          |
-| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                                                                                                                                |
-| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                                                                                                              |
-| Producer         | Complete    | Produce codec, KafkaProducer class with send/partitioning/record batch encoding/batching/retries/idempotent (PID, epoch, sequence numbers)                                                                |
-| Consumer         | Complete    | OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup codecs; KafkaConsumer class with group coordination, offset management, rebalance listener, auto-commit, offset reset strategies   |
-| Consumer Groups  | Complete    | Consumer group protocol (JoinGroup then SyncGroup then Heartbeat then Fetch then OffsetCommit then LeaveGroup), range partition assignor, rebalance listener pattern                                      |
-| Protocol Layer   | Complete    | ApiVersions, Metadata, Fetch, Produce, InitProducerId, OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, FindCoordinator, ListOffsets, SaslHandshake, SaslAuthenticate all complete |
-| Admin Client     | Not started |                                                                                                                                                                                                           |
-| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                                                                                                                              |
-| Connection       | Complete    | Socket adapter interface, single-broker connection with correlation and timeouts, Bun/Node.js/Deno runtime adapters, broker discovery from metadata, connection pool with per-broker limits               |
-| Connection Pool  | Complete    | Per-broker pooling, idle/active tracking, waiter queue, metadata refresh                                                                                                                                  |
-| API Design       | Partial     | `Kafka` class, `createKafka()` factory, connect/disconnect lifecycle, `producer()` and `consumer()` factory methods; admin not started                                                                    |
-| SASL Auth        | Complete    | SaslHandshake/SaslAuthenticate codecs, PLAIN/SCRAM-SHA-256/SCRAM-SHA-512 mechanisms, connection-level `authenticate()` method                                                                             |
-| SSL/TLS          | Not started |                                                                                                                                                                                                           |
-| Serialization    | Not started |                                                                                                                                                                                                           |
-| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                                                                                                                                  |
+| Feature          | Status      | Notes                                                                                                                                                                                                                                                                                  |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                                                                                                                                                                                                       |
+| Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                                                                                                                                                                                                             |
+| Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                                                                                                                                                                                           |
+| Producer         | Complete    | Produce codec, KafkaProducer class with send/partitioning/record batch encoding/batching/retries/idempotent (PID, epoch, sequence numbers)                                                                                                                                             |
+| Consumer         | Complete    | OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup codecs; KafkaConsumer class with group coordination, offset management, rebalance listener, auto-commit, offset reset strategies                                                                                |
+| Consumer Groups  | Complete    | Consumer group protocol (JoinGroup then SyncGroup then Heartbeat then Fetch then OffsetCommit then LeaveGroup), range partition assignor, rebalance listener pattern                                                                                                                   |
+| Protocol Layer   | Complete    | ApiVersions, Metadata, Fetch, Produce, InitProducerId, OffsetCommit, OffsetFetch, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, FindCoordinator, ListOffsets, SaslHandshake, SaslAuthenticate, CreateTopics, DeleteTopics, CreatePartitions, DescribeConfigs, AlterConfigs all complete |
+| Admin Client     | Complete    | CreateTopics, DeleteTopics, CreatePartitions, DescribeConfigs, AlterConfigs codecs; KafkaAdmin class with retry, listTopics/describeTopics via Metadata                                                                                                                                |
+| Record Batches   | Complete    | RecordBatch v2, Record codec, CRC-32C, all compression types                                                                                                                                                                                                                           |
+| Connection       | Complete    | Socket adapter interface, single-broker connection with correlation and timeouts, Bun/Node.js/Deno runtime adapters, broker discovery from metadata, connection pool with per-broker limits                                                                                            |
+| Connection Pool  | Complete    | Per-broker pooling, idle/active tracking, waiter queue, metadata refresh                                                                                                                                                                                                               |
+| API Design       | Complete    | `Kafka` class, `createKafka()` factory, connect/disconnect lifecycle, `producer()`, `consumer()`, and `admin()` factory methods                                                                                                                                                        |
+| SASL Auth        | Complete    | SaslHandshake/SaslAuthenticate codecs, PLAIN/SCRAM-SHA-256/SCRAM-SHA-512 mechanisms, connection-level `authenticate()` method                                                                                                                                                          |
+| SSL/TLS          | Not started |                                                                                                                                                                                                                                                                                        |
+| Serialization    | Not started |                                                                                                                                                                                                                                                                                        |
+| Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                                                                                                                                                                                                               |
 
 ### File Structure
 
@@ -241,7 +247,7 @@ tests against a real broker; connection pool manages connect/disconnect cleanly.
 - [x] Resource lifecycle interface (connect/disconnect patterns)
 - [x] Producer factory method
 - [x] Consumer factory method
-- [ ] Admin client factory method
+- [x] Admin client factory method
 
 ### Testing Infrastructure
 
@@ -289,12 +295,12 @@ consumers; offset reset behaves correctly per strategy.
 
 ### Admin Client
 
-- [ ] CreateTopics request/response
-- [ ] DeleteTopics request/response
-- [ ] CreatePartitions request/response
-- [ ] DescribeTopics / DescribeCluster request/response
-- [ ] DescribeConfigs / AlterConfigs request/response
-- [ ] ListTopics (via Metadata)
+- [x] CreateTopics request/response
+- [x] DeleteTopics request/response
+- [x] CreatePartitions request/response
+- [x] DescribeTopics / DescribeCluster request/response (via Metadata)
+- [x] DescribeConfigs / AlterConfigs request/response
+- [x] ListTopics (via Metadata)
 
 ### Serialization
 

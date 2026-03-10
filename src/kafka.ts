@@ -8,6 +8,7 @@
  * @packageDocumentation
  */
 
+import { type AdminOptions, type AdminRetryConfig, KafkaAdmin } from "./admin.js"
 import { type BrokerInfo, ConnectionPool, type ConnectionPoolOptions } from "./broker-pool.js"
 import { type BrokerAddress, type KafkaConfig, parseBrokerAddress } from "./config.js"
 import {
@@ -118,6 +119,16 @@ export type KafkaConsumerOptions = {
    * Retry configuration.
    */
   readonly retry?: ConsumerRetryConfig
+}
+
+/**
+ * Options for creating an admin client from a {@link Kafka} client.
+ */
+export type KafkaAdminOptions = {
+  /**
+   * Retry configuration for retriable errors.
+   */
+  readonly retry?: AdminRetryConfig
 }
 
 /**
@@ -346,6 +357,24 @@ export class Kafka {
       ...options
     }
     return new KafkaConsumer(consumerOpts)
+  }
+
+  /**
+   * Create an admin client bound to this client.
+   *
+   * The client must be connected before creating an admin client.
+   *
+   * @param options - Admin-specific options.
+   * @returns A new {@link KafkaAdmin} instance.
+   * @throws {KafkaConnectionError} If the client is not connected.
+   */
+  admin(options?: KafkaAdminOptions): KafkaAdmin {
+    const pool = this.getPool()
+    const adminOpts: AdminOptions = {
+      connectionPool: pool,
+      ...options
+    }
+    return new KafkaAdmin(adminOpts)
   }
 
   // -------------------------------------------------------------------------

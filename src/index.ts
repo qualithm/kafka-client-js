@@ -214,6 +214,7 @@ export { ConnectionPool, discoverBrokers } from "./broker-pool.js"
 
 // Kafka client
 export type {
+  KafkaAdminOptions,
   KafkaConsumerOptions,
   KafkaOptions,
   KafkaProducerOptions,
@@ -333,3 +334,80 @@ export {
   createSaslAuthenticator,
   createScramAuthenticator
 } from "./sasl.js"
+
+// Admin client
+export type { AdminOptions, AdminRetryConfig, TopicInfo } from "./admin.js"
+export { createAdmin, KafkaAdmin } from "./admin.js"
+
+// CreateTopics API
+export type {
+  CreateTopicRequest,
+  CreateTopicsConfigEntry,
+  CreateTopicsReplicaAssignment,
+  CreateTopicsRequest,
+  CreateTopicsResponse,
+  CreateTopicsResponseConfigEntry,
+  CreateTopicsTopicResponse
+} from "./create-topics.js"
+export {
+  buildCreateTopicsRequest,
+  decodeCreateTopicsResponse,
+  encodeCreateTopicsRequest
+} from "./create-topics.js"
+
+// DeleteTopics API
+export type {
+  DeleteTopicsRequest,
+  DeleteTopicsResponse,
+  DeleteTopicState,
+  DeleteTopicsTopicResponse
+} from "./delete-topics.js"
+export {
+  buildDeleteTopicsRequest,
+  decodeDeleteTopicsResponse,
+  encodeDeleteTopicsRequest
+} from "./delete-topics.js"
+
+// CreatePartitions API
+export type {
+  CreatePartitionsAssignment,
+  CreatePartitionsRequest,
+  CreatePartitionsResponse,
+  CreatePartitionsTopicRequest,
+  CreatePartitionsTopicResponse
+} from "./create-partitions.js"
+export {
+  buildCreatePartitionsRequest,
+  decodeCreatePartitionsResponse,
+  encodeCreatePartitionsRequest
+} from "./create-partitions.js"
+
+// DescribeConfigs API
+export type {
+  ConfigSynonym,
+  DescribeConfigsEntry,
+  DescribeConfigsRequest,
+  DescribeConfigsResource,
+  DescribeConfigsResourceResponse,
+  DescribeConfigsResponse
+} from "./describe-configs.js"
+export {
+  buildDescribeConfigsRequest,
+  ConfigResourceType,
+  decodeDescribeConfigsResponse,
+  encodeDescribeConfigsRequest
+} from "./describe-configs.js"
+
+// AlterConfigs API
+export type {
+  AlterConfigsEntry,
+  AlterConfigsRequest,
+  AlterConfigsResource,
+  AlterConfigsResourceResponse,
+  AlterConfigsResponse
+} from "./alter-configs.js"
+export {
+  buildAlterConfigsRequest,
+  decodeAlterConfigsResponse,
+  encodeAlterConfigsRequest
+} from "./alter-configs.js"
