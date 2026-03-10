@@ -9,6 +9,10 @@
  * - {@link stringSerializer} — UTF-8 string encoding
  * - {@link jsonSerializer} — JSON via UTF-8 encoding
  *
+ * Async variants ({@link AsyncSerializer}, {@link AsyncDeserializer},
+ * {@link AsyncSerde}) support Schema Registry integration where network
+ * calls are required during serialization/deserialization.
+ *
  * @packageDocumentation
  */
 
@@ -48,6 +52,49 @@ export type Deserializer<T> = {
  * Combined serializer and deserializer for a type `T`.
  */
 export type Serde<T> = Serializer<T> & Deserializer<T>
+
+// ---------------------------------------------------------------------------
+// Async Types (for Schema Registry integration)
+// ---------------------------------------------------------------------------
+
+/**
+ * Async serializer for use with Schema Registry.
+ *
+ * Network calls (schema registration, ID lookup) may be required
+ * during serialization.
+ */
+export type AsyncSerializer<T> = {
+  /**
+   * Serialize a value to bytes, potentially fetching/registering schemas.
+   *
+   * @param value - The value to serialize.
+   * @param topic - The topic the message will be produced to.
+   * @returns The serialized bytes including the Confluent wire format header.
+   */
+  readonly serialize: (value: T, topic: string) => Promise<Uint8Array>
+}
+
+/**
+ * Async deserializer for use with Schema Registry.
+ *
+ * Network calls (schema fetch by ID) may be required during deserialization
+ * when encountering a previously unseen schema ID.
+ */
+export type AsyncDeserializer<T> = {
+  /**
+   * Deserialize bytes to a value, potentially fetching schemas.
+   *
+   * @param data - The bytes to deserialize (including Confluent wire format header).
+   * @param topic - The topic the message was consumed from.
+   * @returns The deserialized value.
+   */
+  readonly deserialize: (data: Uint8Array, topic: string) => Promise<T>
+}
+
+/**
+ * Combined async serializer and deserializer for a type `T`.
+ */
+export type AsyncSerde<T> = AsyncSerializer<T> & AsyncDeserializer<T>
 
 // ---------------------------------------------------------------------------
 // Shared TextEncoder / TextDecoder

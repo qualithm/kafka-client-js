@@ -413,5 +413,39 @@ export {
 } from "./alter-configs.js"
 
 // Serialization
-export type { Deserializer, Serde, Serializer } from "./serialization.js"
+export type {
+  AsyncDeserializer,
+  AsyncSerde,
+  AsyncSerializer,
+  Deserializer,
+  Serde,
+  Serializer
+} from "./serialization.js"
 export { jsonSerializer, stringSerializer } from "./serialization.js"
+
+// Schema Registry
+export type {
+  RegisteredSchema,
+  SchemaRegistryConfig,
+  SchemaType,
+  SubjectNameStrategy
+} from "./schema-registry.js"
+export {
+  decodeWireFormatHeader,
+  encodeWireFormatHeader,
+  recordNameStrategy,
+  SchemaRegistry,
+  SchemaRegistryError,
+  topicNameStrategy,
+  topicRecordNameStrategy,
+  WIRE_FORMAT_HEADER_SIZE,
+  WIRE_FORMAT_MAGIC
+} from "./schema-registry.js"
+
+// Avro serializer
+export type { AvroCodec, AvroSchema, AvroSerdeOptions } from "./avro-serializer.js"
+export { createAvroSerde } from "./avro-serializer.js"
+
+// Protobuf serializer
+export type { ProtobufCodec, ProtobufSchema, ProtobufSerdeOptions } from "./protobuf-serializer.js"
+export { createProtobufSerde } from "./protobuf-serializer.js"
