@@ -86,6 +86,7 @@ Registry, and Connect framework.
 | `bun-socket.ts`        | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                                                                                                           |
 | `node-socket.ts`       | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling                                                                                                                           |
 | `deno-socket.ts`       | Deno runtime socket adapter via `Deno.connect()`, TCP and TLS support                                                                                                                                                |
+| `serialization.ts`     | `Serializer<T>`, `Deserializer<T>`, `Serde<T>` types; built-in `stringSerializer` (UTF-8) and `jsonSerializer<T>()` factory                                                                                          |
 
 ### Features
 
@@ -105,7 +106,7 @@ Registry, and Connect framework.
 | API Design       | Complete    | `Kafka` class, `createKafka()` factory, connect/disconnect lifecycle, `producer()`, `consumer()`, and `admin()` factory methods                                                                                                                                                        |
 | SASL Auth        | Complete    | SaslHandshake/SaslAuthenticate codecs, PLAIN/SCRAM-SHA-256/SCRAM-SHA-512 mechanisms, connection-level `authenticate()` method                                                                                                                                                          |
 | SSL/TLS          | Not started |                                                                                                                                                                                                                                                                                        |
-| Serialization    | Not started |                                                                                                                                                                                                                                                                                        |
+| Serialization    | Partial     | Serializer/Deserializer/Serde types, built-in string and JSON serializers; Avro and Protobuf not yet implemented                                                                                                                                                                       |
 | Compression      | Complete    | gzip, snappy (Xerial), lz4 (frame), zstd                                                                                                                                                                                                                                               |
 
 ### File Structure
@@ -304,9 +305,9 @@ consumers; offset reset behaves correctly per strategy.
 
 ### Serialization
 
-- [ ] Serializer/Deserializer interface
-- [ ] Built-in JSON serializer
-- [ ] Built-in string serializer
+- [x] Serializer/Deserializer interface
+- [x] Built-in JSON serializer
+- [x] Built-in string serializer
 - [ ] Avro serializer (requires Schema Registry — see OD-1)
 - [ ] Protobuf serializer (requires Schema Registry — see OD-1)
 

@@ -411,3 +411,7 @@ export {
   decodeAlterConfigsResponse,
   encodeAlterConfigsRequest
 } from "./alter-configs.js"
+
+// Serialization
+export type { Deserializer, Serde, Serializer } from "./serialization.js"
+export { jsonSerializer, stringSerializer } from "./serialization.js"
