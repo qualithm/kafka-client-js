@@ -112,6 +112,24 @@ export type {
 } from "./metadata.js"
 export { buildMetadataRequest, decodeMetadataResponse, encodeMetadataRequest } from "./metadata.js"
 
+// Fetch API
+export type {
+  FetchAbortedTransaction,
+  FetchPartitionRequest,
+  FetchPartitionResponse,
+  FetchRequest,
+  FetchResponse,
+  FetchTopicRequest,
+  FetchTopicResponse,
+  ForgottenTopic
+} from "./fetch.js"
+export {
+  buildFetchRequest,
+  decodeFetchResponse,
+  encodeFetchRequest,
+  FetchIsolationLevel
+} from "./fetch.js"
+
 // Produce API
 export type {
   ProducePartitionData,
