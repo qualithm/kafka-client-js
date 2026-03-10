@@ -41,33 +41,33 @@ Registry, and Connect framework.
 
 ### Modules
 
-| Module                | Purpose                                                                                                                      |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `index.ts`            | Main entry point, barrel exports                                                                                             |
-| `greet.ts`            | Greeting utility (template placeholder)                                                                                      |
-| `result.ts`           | `DecodeResult<T>` discriminated union and factory helpers                                                                    |
-| `errors.ts`           | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                                            |
-| `config.ts`           | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                                         |
-| `messages.ts`         | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                                     |
-| `api-keys.ts`         | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                                                |
-| `binary-reader.ts`    | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding                      |
-| `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                                  |
-| `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection               |
-| `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse`               |
-| `metadata.ts`         | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`                        |
-| `find-coordinator.ts` | FindCoordinator request/response codec (API key 10, v0–v4), `buildFindCoordinatorRequest`, `decodeFindCoordinatorResponse`   |
-| `list-offsets.ts`     | ListOffsets request/response codec (API key 2, v0–v7), `buildListOffsetsRequest`, `decodeListOffsetsResponse`                |
-| `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry                             |
-| `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                   |
-| `socket.ts`           | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                    |
-| `connection.ts`       | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management                           |
-| `broker-pool.ts`      | `ConnectionPool` with per-broker pooling, `discoverBrokers` for cluster discovery via Metadata API                           |
-| `kafka.ts`            | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect), producer factory method |
-| `produce.ts`          | Produce request/response codec (API key 0, v0–v9), `buildProduceRequest`, `decodeProduceResponse`                            |
-| `producer.ts`         | `KafkaProducer` class with send, partitioning (murmur2/round-robin), record batch encoding, broker routing                   |
-| `bun-socket.ts`       | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                   |
-| `node-socket.ts`      | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling                                   |
-| `deno-socket.ts`      | Deno runtime socket adapter via `Deno.connect()`, TCP and TLS support                                                        |
+| Module                | Purpose                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `index.ts`            | Main entry point, barrel exports                                                                                                                                   |
+| `greet.ts`            | Greeting utility (template placeholder)                                                                                                                            |
+| `result.ts`           | `DecodeResult<T>` discriminated union and factory helpers                                                                                                          |
+| `errors.ts`           | Error hierarchy: `KafkaError` base, protocol/connection/timeout/config subclasses                                                                                  |
+| `config.ts`           | `KafkaConfig`, `BrokerAddress`, SASL/TLS types, `parseBrokerAddress`                                                                                               |
+| `messages.ts`         | `Message`, `TopicPartition`, `Offset`, `ConsumerRecord`, `ProduceResult`                                                                                           |
+| `api-keys.ts`         | API key enum, version ranges, flexible version thresholds, `negotiateVersion`                                                                                      |
+| `binary-reader.ts`    | `BinaryReader` bounds-checked cursor over `Uint8Array`, varint/string/bytes/array/tagged field decoding                                                            |
+| `binary-writer.ts`    | `BinaryWriter` auto-growing buffer builder, varint/string/bytes/array/tagged field encoding                                                                        |
+| `protocol-framing.ts` | Request header v0–v2 encoding, response header v0–v1 decoding, size-prefixed framing, header version selection                                                     |
+| `api-versions.ts`     | ApiVersions request/response codec (API key 18, v0–v3), `buildApiVersionsRequest`, `decodeApiVersionsResponse`                                                     |
+| `metadata.ts`         | Metadata request/response codec (API key 3, v0–v12), `buildMetadataRequest`, `decodeMetadataResponse`                                                              |
+| `find-coordinator.ts` | FindCoordinator request/response codec (API key 10, v0–v4), `buildFindCoordinatorRequest`, `decodeFindCoordinatorResponse`                                         |
+| `list-offsets.ts`     | ListOffsets request/response codec (API key 2, v0–v7), `buildListOffsetsRequest`, `decodeListOffsetsResponse`                                                      |
+| `record-batch.ts`     | RecordBatch v2 (magic=2) encoding/decoding, Record codec, CRC-32C, compression provider registry                                                                   |
+| `compression.ts`      | Compression providers for record batches: gzip, deflate, snappy, lz4, zstd                                                                                         |
+| `socket.ts`           | Socket adapter types: `KafkaSocket`, `SocketConnectOptions`, `SocketFactory` for runtime-agnostic TCP/TLS                                                          |
+| `connection.ts`       | `KafkaConnection` with request/response correlation, receive buffer reassembly, timeout management                                                                 |
+| `broker-pool.ts`      | `ConnectionPool` with per-broker pooling, `discoverBrokers` for cluster discovery via Metadata API                                                                 |
+| `kafka.ts`            | `Kafka` top-level client class, `createKafka` factory, lifecycle state machine (connect/disconnect), producer factory method                                       |
+| `produce.ts`          | Produce request/response codec (API key 0, v0–v9), `buildProduceRequest`, `decodeProduceResponse`                                                                  |
+| `producer.ts`         | `KafkaProducer` class with send, batching (linger/size), retry with exponential backoff, partitioning (murmur2/round-robin), record batch encoding, broker routing |
+| `bun-socket.ts`       | Bun runtime socket adapter via `Bun.connect()`, TCP and TLS support, backpressure handling                                                                         |
+| `node-socket.ts`      | Node.js runtime socket adapter via `net`/`tls`, TCP and TLS support, backpressure handling                                                                         |
+| `deno-socket.ts`      | Deno runtime socket adapter via `Deno.connect()`, TCP and TLS support                                                                                              |
 
 ### Features
 
@@ -76,7 +76,7 @@ Registry, and Connect framework.
 | Core Types       | Complete    | DecodeResult, errors, config, messages, API keys                                                                                                                                            |
 | Binary Codec     | Complete    | BinaryReader, BinaryWriter, varints, strings, bytes, arrays, tagged fields                                                                                                                  |
 | Protocol Framing | Complete    | Request header v0–v2, response header v0–v1, size-prefixed framing, header version selection                                                                                                |
-| Producer         | Partial     | Produce codec, KafkaProducer class with send/partitioning/record batch encoding; batching/retries/idempotent not started                                                                    |
+| Producer         | Partial     | Produce codec, KafkaProducer class with send/partitioning/record batch encoding/batching/retries; idempotent not started                                                                    |
 | Consumer         | Not started |                                                                                                                                                                                             |
 | Consumer Groups  | Not started |                                                                                                                                                                                             |
 | Admin Client     | Not started |                                                                                                                                                                                             |
@@ -244,8 +244,8 @@ run basic produce/consume.
 - [x] Produce request/response encoding
 - [x] Basic send functionality
 - [x] Partitioning strategies (round-robin, key-hash, custom)
-- [ ] Batching with configurable linger and batch size
-- [ ] Retry logic with configurable attempts and backoff
+- [x] Batching with configurable linger and batch size
+- [x] Retry logic with configurable attempts and backoff
 - [ ] Idempotent producer (InitProducerId, sequence numbers)
 
 Acceptance: Can produce messages to a topic, messages land in expected partitions, retries recover
@@ -297,7 +297,8 @@ consumers; offset reset behaves correctly per strategy.
 
 > Append-only. Never edit or delete existing entries.
 
-| Date       | Learning                                                                                                                                                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-03-06 | TypeScript `override readonly name = "SubclassName"` on Error subclasses causes TS2416 when the base uses a string literal type; declare `name` as `string` in the base class to allow overriding with narrower literals |
-| 2026-03-06 | BinaryWriter/BinaryReader treat all strings as nullable — `writeString(string \| null)` and `readString(): DecodeResult<string \| null>` — no separate nullable variants needed                                          |
+| Date       | Learning                                                                                                                                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-03-06 | TypeScript `override readonly name = "SubclassName"` on Error subclasses causes TS2416 when the base uses a string literal type; declare `name` as `string` in the base class to allow overriding with narrower literals                                |
+| 2026-03-06 | BinaryWriter/BinaryReader treat all strings as nullable — `writeString(string \| null)` and `readString(): DecodeResult<string \| null>` — no separate nullable variants needed                                                                         |
+| 2026-03-10 | Producer batching with async metadata fetch requires tracking in-flight accumulations (`pendingEnqueues` set) so `flush()` waits for messages to be accumulated before draining; otherwise `flush()` races with `send()` and finds an empty accumulator |

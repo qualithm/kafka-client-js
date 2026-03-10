@@ -12,7 +12,13 @@ import { type BrokerInfo, ConnectionPool, type ConnectionPoolOptions } from "./b
 import { type BrokerAddress, type KafkaConfig, parseBrokerAddress } from "./config.js"
 import { KafkaConfigError, KafkaConnectionError } from "./errors.js"
 import type { Acks } from "./produce.js"
-import { KafkaProducer, type Partitioner, type ProducerOptions } from "./producer.js"
+import {
+  type BatchConfig,
+  KafkaProducer,
+  type Partitioner,
+  type ProducerOptions,
+  type RetryConfig
+} from "./producer.js"
 import type { CompressionCodec } from "./record-batch.js"
 import type { SocketFactory } from "./socket.js"
 
@@ -75,6 +81,15 @@ export type KafkaProducerOptions = {
    * Transactional ID for transactional producers.
    */
   readonly transactionalId?: string
+  /**
+   * Batching configuration.
+   * When `lingerMs > 0`, messages are accumulated and flushed in batches.
+   */
+  readonly batch?: BatchConfig
+  /**
+   * Retry configuration for retriable errors.
+   */
+  readonly retry?: RetryConfig
 }
 
 // ---------------------------------------------------------------------------

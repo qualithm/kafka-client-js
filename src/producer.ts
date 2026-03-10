@@ -51,6 +51,52 @@ import {
 export type Partitioner = (topic: string, key: Uint8Array | null, partitionCount: number) => number
 
 /**
+ * Batching configuration for the producer.
+ *
+ * When `lingerMs` is greater than 0, messages are accumulated and sent in
+ * batches to reduce the number of requests to the broker.
+ */
+export type BatchConfig = {
+  /**
+   * Maximum time in milliseconds to wait before flushing a batch.
+   * Set to 0 for no lingering (immediate send).
+   * @default 0
+   */
+  readonly lingerMs?: number
+  /**
+   * Maximum batch size in bytes per partition before triggering a flush.
+   * @default 16384
+   */
+  readonly batchBytes?: number
+}
+
+/**
+ * Retry configuration for the producer.
+ */
+export type RetryConfig = {
+  /**
+   * Maximum number of retry attempts for retriable errors.
+   * @default 0
+   */
+  readonly maxRetries?: number
+  /**
+   * Initial delay in milliseconds before the first retry.
+   * @default 100
+   */
+  readonly initialRetryMs?: number
+  /**
+   * Maximum delay in milliseconds between retries.
+   * @default 30000
+   */
+  readonly maxRetryMs?: number
+  /**
+   * Multiplier for exponential backoff between retries.
+   * @default 2
+   */
+  readonly multiplier?: number
+}
+
+/**
  * Options for creating a {@link KafkaProducer}.
  */
 export type ProducerOptions = {
@@ -87,6 +133,15 @@ export type ProducerOptions = {
    * Implies idempotent = true.
    */
   readonly transactionalId?: string
+  /**
+   * Batching configuration.
+   * When `lingerMs > 0`, messages are accumulated and flushed in batches.
+   */
+  readonly batch?: BatchConfig
+  /**
+   * Retry configuration for retriable errors.
+   */
+  readonly retry?: RetryConfig
 }
 
 /**
@@ -95,6 +150,23 @@ export type ProducerOptions = {
 type TopicMetadata = {
   readonly partitions: readonly MetadataPartition[]
   readonly partitionLeaders: ReadonlyMap<number, number>
+}
+
+/**
+ * Deferred promise callbacks for a single message in a batch.
+ */
+type DeferredResult = {
+  readonly resolve: (result: ProduceResult) => void
+  readonly reject: (error: Error) => void
+}
+
+/**
+ * Accumulated messages for a single partition, pending flush.
+ */
+type PartitionAccumulator = {
+  readonly messages: Message[]
+  readonly deferreds: DeferredResult[]
+  sizeBytes: number
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +267,50 @@ function murmur2(data: Uint8Array): number {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Estimate the wire size of a message in bytes.
+ */
+function estimateMessageSize(message: Message): number {
+  let size = 64 // record metadata overhead
+  if (message.key) {
+    size += message.key.byteLength
+  }
+  if (message.value) {
+    size += message.value.byteLength
+  }
+  if (message.headers) {
+    for (const header of message.headers) {
+      size += header.key.length + 4
+      if (header.value) {
+        size += header.value.byteLength
+      }
+    }
+  }
+  return size
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Resolve the acks setting, forcing All for idempotent/transactional producers.
+ */
+function resolveAcks(options: ProducerOptions): Acks {
+  const acks = options.acks ?? Acks.All
+  if (
+    (options.idempotent === true || typeof options.transactionalId === "string") &&
+    acks !== Acks.All
+  ) {
+    return Acks.All
+  }
+  return acks
+}
+
+// ---------------------------------------------------------------------------
 // KafkaProducer
 // ---------------------------------------------------------------------------
 
@@ -222,24 +338,31 @@ export class KafkaProducer {
   private readonly partitioner: Partitioner
   private readonly compression: CompressionCodecType
   private readonly transactionalId: string | null
+  private readonly lingerMs: number
+  private readonly batchBytes: number
+  private readonly maxRetries: number
+  private readonly initialRetryMs: number
+  private readonly maxRetryMs: number
+  private readonly retryMultiplier: number
   private readonly topicMetadataCache = new Map<string, TopicMetadata>()
+  private readonly accumulator = new Map<string, Map<number, PartitionAccumulator>>()
+  private readonly pendingEnqueues = new Set<Promise<void>>()
+  private lingerTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
 
   constructor(options: ProducerOptions) {
     this.pool = options.connectionPool
-    this.acks = options.acks ?? Acks.All
+    this.acks = resolveAcks(options)
     this.timeoutMs = options.timeoutMs ?? 30_000
     this.partitioner = options.partitioner ?? defaultPartitioner()
     this.compression = options.compression ?? CompressionCodec.NONE
     this.transactionalId = options.transactionalId ?? null
-
-    // Idempotent or transactional producers must use acks = All
-    if (
-      (options.idempotent === true || typeof options.transactionalId === "string") &&
-      this.acks !== Acks.All
-    ) {
-      this.acks = Acks.All
-    }
+    this.lingerMs = options.batch?.lingerMs ?? 0
+    this.batchBytes = options.batch?.batchBytes ?? 16_384
+    this.maxRetries = options.retry?.maxRetries ?? 0
+    this.initialRetryMs = options.retry?.initialRetryMs ?? 100
+    this.maxRetryMs = options.retry?.maxRetryMs ?? 30_000
+    this.retryMultiplier = options.retry?.multiplier ?? 2
   }
 
   /**
@@ -262,50 +385,11 @@ export class KafkaProducer {
       return []
     }
 
-    // Ensure we have metadata for this topic
-    const metadata = await this.getTopicMetadata(topic)
-
-    // Group messages by partition
-    const partitionCount = metadata.partitions.length
-    const byPartition = new Map<number, Message[]>()
-
-    for (const message of messages) {
-      const partition = this.partitioner(topic, message.key, partitionCount)
-      let group = byPartition.get(partition)
-      if (!group) {
-        group = []
-        byPartition.set(partition, group)
-      }
-      group.push(message)
+    if (this.lingerMs <= 0) {
+      return this.withRetry(topic, async () => this.sendImmediate(topic, messages))
     }
 
-    // Group partitions by leader broker
-    const byLeader = new Map<number, Map<number, Message[]>>()
-
-    for (const [partition, msgs] of byPartition) {
-      const leaderId = metadata.partitionLeaders.get(partition)
-      if (leaderId === undefined || leaderId < 0) {
-        throw new KafkaConnectionError(`no leader for ${topic}-${String(partition)}`, {
-          retriable: true
-        })
-      }
-
-      let leaderPartitions = byLeader.get(leaderId)
-      if (!leaderPartitions) {
-        leaderPartitions = new Map()
-        byLeader.set(leaderId, leaderPartitions)
-      }
-      leaderPartitions.set(partition, msgs)
-    }
-
-    // Send to each leader in parallel
-    const sendPromises: Promise<ProduceResult[]>[] = []
-    for (const [leaderId, partitions] of byLeader) {
-      sendPromises.push(this.sendToLeader(topic, leaderId, partitions))
-    }
-
-    const results = await Promise.all(sendPromises)
-    return results.flat()
+    return this.enqueueMessages(topic, messages)
   }
 
   /**
@@ -330,36 +414,301 @@ export class KafkaProducer {
       return { topicPartition, baseOffset: -1n }
     }
 
-    const metadata = await this.getTopicMetadata(topicPartition.topic)
-    const leaderId = metadata.partitionLeaders.get(topicPartition.partition)
-    if (leaderId === undefined || leaderId < 0) {
-      throw new KafkaConnectionError(
-        `no leader for ${topicPartition.topic}-${String(topicPartition.partition)}`,
-        { retriable: true }
-      )
-    }
+    return this.withRetry(topicPartition.topic, async () => {
+      const metadata = await this.getTopicMetadata(topicPartition.topic)
+      const leaderId = metadata.partitionLeaders.get(topicPartition.partition)
+      if (leaderId === undefined || leaderId < 0) {
+        throw new KafkaConnectionError(
+          `no leader for ${topicPartition.topic}-${String(topicPartition.partition)}`,
+          { retriable: true }
+        )
+      }
 
-    const partitions = new Map<number, Message[]>()
-    partitions.set(topicPartition.partition, [...messages])
+      const partitions = new Map<number, Message[]>()
+      partitions.set(topicPartition.partition, [...messages])
 
-    const results = await this.sendToLeader(topicPartition.topic, leaderId, partitions)
-    return results[0]
+      const results = await this.sendToLeader(topicPartition.topic, leaderId, partitions)
+      return results[0]
+    })
   }
 
   /**
    * Close the producer.
    *
-   * After closing, no more messages can be sent.
+   * Flushes any pending batches before closing. After closing, no more
+   * messages can be sent.
    */
   async close(): Promise<void> {
-    this.closed = true
-    this.topicMetadataCache.clear()
-    await Promise.resolve()
+    if (this.closed) {
+      return
+    }
+    try {
+      await this.flush()
+    } finally {
+      this.clearLingerTimer()
+      this.closed = true
+      this.topicMetadataCache.clear()
+    }
+  }
+
+  /**
+   * Flush all accumulated messages immediately.
+   *
+   * Forces all pending batches to be sent. Resolves when all batched
+   * messages have been acknowledged (or rejected on failure).
+   */
+  async flush(): Promise<void> {
+    // Wait for any in-flight accumulations to finish before draining
+    if (this.pendingEnqueues.size > 0) {
+      await Promise.all(this.pendingEnqueues)
+    }
+    this.clearLingerTimer()
+    const snapshot = this.drainAccumulator()
+    if (snapshot.size === 0) {
+      return
+    }
+
+    const promises: Promise<void>[] = []
+    for (const [topic, partitions] of snapshot) {
+      promises.push(this.flushTopicBatches(topic, partitions))
+    }
+    await Promise.all(promises)
   }
 
   // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
+
+  /**
+   * Send messages immediately without batching.
+   */
+  private async sendImmediate(
+    topic: string,
+    messages: readonly Message[]
+  ): Promise<readonly ProduceResult[]> {
+    const metadata = await this.getTopicMetadata(topic)
+    const partitionCount = metadata.partitions.length
+    const byPartition = new Map<number, Message[]>()
+
+    for (const message of messages) {
+      const partition = this.partitioner(topic, message.key, partitionCount)
+      let group = byPartition.get(partition)
+      if (!group) {
+        group = []
+        byPartition.set(partition, group)
+      }
+      group.push(message)
+    }
+
+    const byLeader = new Map<number, Map<number, Message[]>>()
+
+    for (const [partition, msgs] of byPartition) {
+      const leaderId = metadata.partitionLeaders.get(partition)
+      if (leaderId === undefined || leaderId < 0) {
+        throw new KafkaConnectionError(`no leader for ${topic}-${String(partition)}`, {
+          retriable: true
+        })
+      }
+
+      let leaderPartitions = byLeader.get(leaderId)
+      if (!leaderPartitions) {
+        leaderPartitions = new Map()
+        byLeader.set(leaderId, leaderPartitions)
+      }
+      leaderPartitions.set(partition, msgs)
+    }
+
+    const sendPromises: Promise<ProduceResult[]>[] = []
+    for (const [leaderId, partitions] of byLeader) {
+      sendPromises.push(this.sendToLeader(topic, leaderId, partitions))
+    }
+
+    const results = await Promise.all(sendPromises)
+    return results.flat()
+  }
+
+  /**
+   * Retry a function on retriable errors with exponential backoff.
+   */
+  private async withRetry<T>(topic: string, fn: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fn()
+      } catch (error) {
+        const isRetriable = error instanceof KafkaError && error.retriable
+        if (!isRetriable || attempt >= this.maxRetries) {
+          throw error
+        }
+        this.topicMetadataCache.delete(topic)
+        const delay = Math.min(
+          this.initialRetryMs * this.retryMultiplier ** attempt,
+          this.maxRetryMs
+        )
+        await sleep(delay)
+      }
+    }
+  }
+
+  /**
+   * Enqueue messages into the accumulator for batched sending.
+   */
+  private async enqueueMessages(
+    topic: string,
+    messages: readonly Message[]
+  ): Promise<readonly ProduceResult[]> {
+    let resolveAccumulated!: () => void
+    const accumulatedPromise = new Promise<void>((resolve) => {
+      resolveAccumulated = resolve
+    })
+    this.pendingEnqueues.add(accumulatedPromise)
+
+    let promises: Promise<ProduceResult>[]
+    try {
+      const metadata = await this.getTopicMetadata(topic)
+      const partitionCount = metadata.partitions.length
+
+      promises = []
+      let batchReady = false
+
+      for (const message of messages) {
+        const partition = this.partitioner(topic, message.key, partitionCount)
+
+        const promise = new Promise<ProduceResult>((resolve, reject) => {
+          this.addToAccumulator(topic, partition, message, { resolve, reject })
+        })
+        promises.push(promise)
+
+        const batch = this.getPartitionBatch(topic, partition)
+        if (batch && batch.sizeBytes >= this.batchBytes) {
+          batchReady = true
+        }
+      }
+
+      // Signal accumulation complete before triggering flush
+      resolveAccumulated()
+      this.pendingEnqueues.delete(accumulatedPromise)
+
+      if (batchReady) {
+        void this.flush()
+      } else {
+        this.ensureLingerTimer()
+      }
+    } catch (error) {
+      resolveAccumulated()
+      this.pendingEnqueues.delete(accumulatedPromise)
+      throw error
+    }
+
+    return Promise.all(promises)
+  }
+
+  private addToAccumulator(
+    topic: string,
+    partition: number,
+    message: Message,
+    deferred: DeferredResult
+  ): void {
+    let topicMap = this.accumulator.get(topic)
+    if (!topicMap) {
+      topicMap = new Map()
+      this.accumulator.set(topic, topicMap)
+    }
+
+    let batch = topicMap.get(partition)
+    if (!batch) {
+      batch = { messages: [], deferreds: [], sizeBytes: 0 }
+      topicMap.set(partition, batch)
+    }
+
+    batch.messages.push(message)
+    batch.deferreds.push(deferred)
+    batch.sizeBytes += estimateMessageSize(message)
+  }
+
+  private getPartitionBatch(topic: string, partition: number): PartitionAccumulator | undefined {
+    return this.accumulator.get(topic)?.get(partition)
+  }
+
+  private drainAccumulator(): Map<string, Map<number, PartitionAccumulator>> {
+    const snapshot = new Map(this.accumulator)
+    this.accumulator.clear()
+    return snapshot
+  }
+
+  /**
+   * Flush accumulated batches for a single topic.
+   */
+  private async flushTopicBatches(
+    topic: string,
+    partitions: Map<number, PartitionAccumulator>
+  ): Promise<void> {
+    try {
+      const results = await this.withRetry(topic, async () => {
+        const metadata = await this.getTopicMetadata(topic)
+
+        const byLeader = new Map<number, Map<number, Message[]>>()
+        for (const [partition, batch] of partitions) {
+          const leaderId = metadata.partitionLeaders.get(partition)
+          if (leaderId === undefined || leaderId < 0) {
+            throw new KafkaConnectionError(`no leader for ${topic}-${String(partition)}`, {
+              retriable: true
+            })
+          }
+          let lp = byLeader.get(leaderId)
+          if (!lp) {
+            lp = new Map()
+            byLeader.set(leaderId, lp)
+          }
+          lp.set(partition, batch.messages)
+        }
+
+        const sendPromises: Promise<ProduceResult[]>[] = []
+        for (const [leaderId, leaderPartitions] of byLeader) {
+          sendPromises.push(this.sendToLeader(topic, leaderId, leaderPartitions))
+        }
+
+        const leaderResults = await Promise.all(sendPromises)
+        return leaderResults.flat()
+      })
+
+      const resultsByPartition = new Map<number, ProduceResult>()
+      for (const result of results) {
+        resultsByPartition.set(result.topicPartition.partition, result)
+      }
+
+      for (const [partition, batch] of partitions) {
+        const result = resultsByPartition.get(partition)
+        if (result) {
+          for (const d of batch.deferreds) {
+            d.resolve(result)
+          }
+        }
+      }
+    } catch (error) {
+      for (const [, batch] of partitions) {
+        for (const d of batch.deferreds) {
+          d.reject(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+    }
+  }
+
+  private ensureLingerTimer(): void {
+    if (this.lingerTimer !== null) {
+      return
+    }
+    this.lingerTimer = setTimeout(() => {
+      this.lingerTimer = null
+      void this.flush()
+    }, this.lingerMs)
+  }
+
+  private clearLingerTimer(): void {
+    if (this.lingerTimer !== null) {
+      clearTimeout(this.lingerTimer)
+      this.lingerTimer = null
+    }
+  }
 
   /**
    * Send partitioned messages to a specific leader broker.

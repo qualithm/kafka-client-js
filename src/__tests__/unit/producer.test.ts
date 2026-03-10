@@ -1405,3 +1405,544 @@ describe("KafkaProducer edge-case errors", () => {
     ).rejects.toThrow("failed to decode produce response")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Batching
+// ---------------------------------------------------------------------------
+
+describe("KafkaProducer batching", () => {
+  const encoder = new TextEncoder()
+
+  it("flushes messages on explicit flush()", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "batch-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "batch-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 10n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      batch: { lingerMs: 5000 }
+    })
+
+    // send() should not immediately produce — it returns a promise that resolves on flush
+    const resultPromise = producer.send("batch-topic", [
+      { key: null, value: encoder.encode("batched-message") }
+    ])
+
+    // The produce connection shouldn't have been called yet (only metadata)
+    // Force flush
+    await producer.flush()
+
+    const results = await resultPromise
+    expect(results).toHaveLength(1)
+    expect(results[0].topicPartition).toEqual({ topic: "batch-topic", partition: 0 })
+    expect(results[0].baseOffset).toBe(10n)
+  })
+
+  it("flushes when batch size is exceeded", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "size-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "size-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 20n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      batch: { lingerMs: 60_000, batchBytes: 100 }
+    })
+
+    // Send a large message that exceeds batchBytes — should trigger auto-flush
+    const largeValue = new Uint8Array(200)
+    const results = await producer.send("size-topic", [{ key: null, value: largeValue }])
+    expect(results).toHaveLength(1)
+    expect(results[0].baseOffset).toBe(20n)
+  })
+
+  it("close() flushes pending batches", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "close-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "close-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 30n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      batch: { lingerMs: 60_000 }
+    })
+
+    const resultPromise = producer.send("close-topic", [
+      { key: null, value: encoder.encode("close-msg") }
+    ])
+
+    // close() should flush before closing
+    await producer.close()
+
+    const results = await resultPromise
+    expect(results).toHaveLength(1)
+    expect(results[0].baseOffset).toBe(30n)
+  })
+
+  it("sends immediately when lingerMs is 0 (default)", async () => {
+    const { pool, mockConn } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "immediate-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "immediate-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 0n }]
+        }
+      ]
+    )
+
+    // No batch config — should behave like original immediate send
+    const producer = new KafkaProducer({ connectionPool: pool })
+
+    const results = await producer.send("immediate-topic", [
+      { key: null, value: encoder.encode("immediate") }
+    ])
+    expect(results).toHaveLength(1)
+    // Produce connection should have been called
+    expect(mockConn.send).toHaveBeenCalled()
+  })
+
+  it("flush() is a no-op when accumulator is empty", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      batch: { lingerMs: 1000 }
+    })
+
+    // Should resolve immediately without errors
+    await producer.flush()
+  })
+
+  it("rejects batched message deferreds on send failure", async () => {
+    // Create a pool where produce fails
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "fail-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ])
+    ])
+    // Produce connection that returns a protocol error
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS),
+      buildProduceResponseBody(
+        [
+          {
+            name: "fail-topic",
+            partitions: [{ partitionIndex: 0, errorCode: 2, baseOffset: 0n }]
+          }
+        ],
+        8
+      )
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let n = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        n++
+        return n === 1 ? metadataConn : produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      batch: { lingerMs: 60_000 }
+    })
+
+    const resultPromise = producer.send("fail-topic", [
+      { key: null, value: encoder.encode("will-fail") }
+    ])
+
+    await producer.flush()
+
+    await expect(resultPromise).rejects.toThrow()
+  })
+
+  it("flushes on linger timer expiry", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "linger-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "linger-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 50n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      batch: { lingerMs: 5 }
+    })
+
+    // send() accumulates; linger timer fires after 5ms and flushes automatically
+    const results = await producer.send("linger-topic", [
+      { key: null, value: encoder.encode("linger-msg") }
+    ])
+
+    expect(results).toHaveLength(1)
+    expect(results[0].baseOffset).toBe(50n)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Retry
+// ---------------------------------------------------------------------------
+
+describe("KafkaProducer retry", () => {
+  const encoder = new TextEncoder()
+
+  it("retries on retriable errors", async () => {
+    // First produce attempt fails with retriable error, second succeeds
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "retry-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ]),
+      // Second metadata fetch on retry
+      buildApiVersionsBody(STANDARD_APIS),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "retry-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ])
+    ])
+
+    const failProduceBody = buildProduceResponseBody(
+      [
+        {
+          name: "retry-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 7, baseOffset: 0n }] // REQUEST_TIMED_OUT
+        }
+      ],
+      8
+    )
+    const successProduceBody = buildProduceResponseBody(
+      [
+        {
+          name: "retry-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 42n }]
+        }
+      ],
+      8
+    )
+
+    const produceConn = createMockConnection([
+      // First attempt: ApiVersions + fail
+      buildApiVersionsBody(STANDARD_APIS),
+      failProduceBody,
+      // Second attempt (retry): ApiVersions + success
+      buildApiVersionsBody(STANDARD_APIS),
+      successProduceBody
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let getConnCalls = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCalls++
+        // Odd calls for metadata, even calls for produce
+        return getConnCalls % 2 === 1 ? metadataConn : produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      retry: { maxRetries: 2, initialRetryMs: 1 }
+    })
+
+    const results = await producer.send("retry-topic", [
+      { key: null, value: encoder.encode("retry-msg") }
+    ])
+
+    expect(results).toHaveLength(1)
+    expect(results[0].baseOffset).toBe(42n)
+  })
+
+  it("does not retry non-retriable errors", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "no-retry-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "no-retry-topic",
+          partitions: [
+            {
+              partitionIndex: 0,
+              errorCode: 17, // INVALID_PARTITIONS (non-retriable)
+              baseOffset: 0n
+            }
+          ]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      retry: { maxRetries: 3, initialRetryMs: 1 }
+    })
+
+    await expect(
+      producer.send("no-retry-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow(KafkaProtocolError)
+  })
+
+  it("gives up after maxRetries attempts", async () => {
+    // Create a pool that always fails with retriable error
+    const metadataBody = buildMetadataV1Body(TEST_BROKERS, [
+      {
+        errorCode: 0,
+        name: "exhaust-topic",
+        isInternal: false,
+        partitions: [
+          { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+        ]
+      }
+    ])
+    const failBody = buildProduceResponseBody(
+      [
+        {
+          name: "exhaust-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 7, baseOffset: 0n }]
+        }
+      ],
+      8
+    )
+
+    // Enough responses for 3 attempts (metadata + produce each time)
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS),
+      metadataBody,
+      buildApiVersionsBody(STANDARD_APIS),
+      metadataBody,
+      buildApiVersionsBody(STANDARD_APIS),
+      metadataBody
+    ])
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS),
+      failBody,
+      buildApiVersionsBody(STANDARD_APIS),
+      failBody,
+      buildApiVersionsBody(STANDARD_APIS),
+      failBody
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let getConnCalls = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCalls++
+        return getConnCalls % 2 === 1 ? metadataConn : produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      retry: { maxRetries: 2, initialRetryMs: 1 }
+    })
+
+    // Should exhaust retries (attempt 0 + 2 retries = 3 attempts, all fail)
+    await expect(
+      producer.send("exhaust-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow(KafkaProtocolError)
+  })
+
+  it("retries sendToPartition on retriable errors", async () => {
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "stp-retry",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ]),
+      // Retry metadata fetch
+      buildApiVersionsBody(STANDARD_APIS),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "stp-retry",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ])
+    ])
+
+    const produceConn = createMockConnection([
+      // First attempt fails
+      buildApiVersionsBody(STANDARD_APIS),
+      buildProduceResponseBody(
+        [
+          {
+            name: "stp-retry",
+            partitions: [{ partitionIndex: 0, errorCode: 6, baseOffset: 0n }] // NOT_LEADER_OR_FOLLOWER
+          }
+        ],
+        8
+      ),
+      // Retry succeeds
+      buildApiVersionsBody(STANDARD_APIS),
+      buildProduceResponseBody(
+        [
+          {
+            name: "stp-retry",
+            partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 55n }]
+          }
+        ],
+        8
+      )
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let getConnCalls = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCalls++
+        return getConnCalls % 2 === 1 ? metadataConn : produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      retry: { maxRetries: 2, initialRetryMs: 1 }
+    })
+
+    const result = await producer.sendToPartition({ topic: "stp-retry", partition: 0 }, [
+      { key: null, value: encoder.encode("retry") }
+    ])
+
+    expect(result.baseOffset).toBe(55n)
+  })
+
+  it("does not retry when maxRetries is 0 (default)", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "no-config-retry",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "no-config-retry",
+          partitions: [{ partitionIndex: 0, errorCode: 7, baseOffset: 0n }]
+        }
+      ]
+    )
+
+    // No retry config — default maxRetries=0
+    const producer = new KafkaProducer({ connectionPool: pool })
+
+    await expect(
+      producer.send("no-config-retry", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow(KafkaProtocolError)
+  })
+})
