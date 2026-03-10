@@ -12,6 +12,11 @@ import { ApiKey, negotiateVersion } from "./api-keys.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "./api-versions.js"
 import type { ConnectionPool } from "./broker-pool.js"
 import { KafkaConnectionError, KafkaError, KafkaProtocolError } from "./errors.js"
+import {
+  decodeInitProducerIdResponse,
+  encodeInitProducerIdRequest,
+  type InitProducerIdRequest
+} from "./init-producer-id.js"
 import type { Message, ProduceResult, TopicPartition } from "./messages.js"
 import {
   decodeMetadataResponse,
@@ -344,11 +349,18 @@ export class KafkaProducer {
   private readonly initialRetryMs: number
   private readonly maxRetryMs: number
   private readonly retryMultiplier: number
+  private readonly idempotent: boolean
   private readonly topicMetadataCache = new Map<string, TopicMetadata>()
   private readonly accumulator = new Map<string, Map<number, PartitionAccumulator>>()
   private readonly pendingEnqueues = new Set<Promise<void>>()
   private lingerTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
+
+  // Idempotent producer state
+  private producerId = -1n
+  private producerEpoch = -1
+  private readonly sequenceNumbers = new Map<string, number>()
+  private producerIdPromise: Promise<void> | null = null
 
   constructor(options: ProducerOptions) {
     this.pool = options.connectionPool
@@ -356,10 +368,11 @@ export class KafkaProducer {
     this.timeoutMs = options.timeoutMs ?? 30_000
     this.partitioner = options.partitioner ?? defaultPartitioner()
     this.compression = options.compression ?? CompressionCodec.NONE
+    this.idempotent = options.idempotent === true || typeof options.transactionalId === "string"
     this.transactionalId = options.transactionalId ?? null
     this.lingerMs = options.batch?.lingerMs ?? 0
     this.batchBytes = options.batch?.batchBytes ?? 16_384
-    this.maxRetries = options.retry?.maxRetries ?? 0
+    this.maxRetries = options.retry?.maxRetries ?? (this.idempotent ? 5 : 0)
     this.initialRetryMs = options.retry?.initialRetryMs ?? 100
     this.maxRetryMs = options.retry?.maxRetryMs ?? 30_000
     this.retryMultiplier = options.retry?.multiplier ?? 2
@@ -386,6 +399,7 @@ export class KafkaProducer {
     }
 
     if (this.lingerMs <= 0) {
+      await this.ensureProducerId()
       return this.withRetry(topic, async () => this.sendImmediate(topic, messages))
     }
 
@@ -415,6 +429,7 @@ export class KafkaProducer {
     }
 
     return this.withRetry(topicPartition.topic, async () => {
+      await this.ensureProducerId()
       const metadata = await this.getTopicMetadata(topicPartition.topic)
       const leaderId = metadata.partitionLeaders.get(topicPartition.partition)
       if (leaderId === undefined || leaderId < 0) {
@@ -448,6 +463,9 @@ export class KafkaProducer {
       this.clearLingerTimer()
       this.closed = true
       this.topicMetadataCache.clear()
+      this.sequenceNumbers.clear()
+      this.producerId = -1n
+      this.producerEpoch = -1
     }
   }
 
@@ -473,6 +491,129 @@ export class KafkaProducer {
       promises.push(this.flushTopicBatches(topic, partitions))
     }
     await Promise.all(promises)
+  }
+
+  // -------------------------------------------------------------------------
+  // Internal — Idempotent producer
+  // -------------------------------------------------------------------------
+
+  /**
+   * Ensure a producer ID has been allocated.
+   *
+   * For idempotent/transactional producers, sends an InitProducerId request
+   * to the broker on the first call. Subsequent calls return immediately.
+   * Concurrent callers share the same in-flight request.
+   */
+  private async ensureProducerId(): Promise<void> {
+    if (!this.idempotent) {
+      return
+    }
+    if (this.producerId >= 0n) {
+      return
+    }
+    if (this.producerIdPromise) {
+      return this.producerIdPromise
+    }
+    this.producerIdPromise = this.initProducerId()
+    try {
+      await this.producerIdPromise
+    } finally {
+      this.producerIdPromise = null
+    }
+  }
+
+  /**
+   * Send an InitProducerId request to the broker.
+   */
+  private async initProducerId(): Promise<void> {
+    const { brokers } = this.pool
+    if (brokers.size === 0) {
+      throw new KafkaConnectionError("no brokers available", { retriable: true })
+    }
+
+    const firstBroker = brokers.values().next().value
+    if (!firstBroker) {
+      throw new KafkaConnectionError("no brokers available", { retriable: true })
+    }
+
+    const conn = await this.pool.getConnectionByNodeId(firstBroker.nodeId)
+    try {
+      // Negotiate InitProducerId version
+      const apiVersionsReader = await conn.send(ApiKey.ApiVersions, 0, () => {
+        // v0 has an empty body
+      })
+      const apiVersionsResult = decodeApiVersionsResponse(apiVersionsReader, 0)
+      if (!apiVersionsResult.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode api versions response: ${apiVersionsResult.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      const versionMap = apiVersionsToMap(apiVersionsResult.value)
+      const initPidRange = versionMap.get(ApiKey.InitProducerId)
+      if (!initPidRange) {
+        throw new KafkaConnectionError("broker does not support init producer id api", {
+          broker: conn.broker,
+          retriable: false
+        })
+      }
+
+      const initPidVersion = negotiateVersion(ApiKey.InitProducerId, initPidRange)
+      if (initPidVersion === null) {
+        throw new KafkaConnectionError("no compatible init producer id api version", {
+          broker: conn.broker,
+          retriable: false
+        })
+      }
+
+      const request: InitProducerIdRequest = {
+        transactionalId: this.transactionalId,
+        transactionTimeoutMs: this.transactionalId !== null ? this.timeoutMs : -1,
+        producerId: initPidVersion >= 3 ? this.producerId : undefined,
+        producerEpoch: initPidVersion >= 3 ? this.producerEpoch : undefined
+      }
+
+      const responseReader = await conn.send(ApiKey.InitProducerId, initPidVersion, (writer) => {
+        encodeInitProducerIdRequest(writer, request, initPidVersion)
+      })
+
+      const responseResult = decodeInitProducerIdResponse(responseReader, initPidVersion)
+      if (!responseResult.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode init producer id response: ${responseResult.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      if (responseResult.value.errorCode !== 0) {
+        throw new KafkaProtocolError(
+          `init producer id failed with error code ${String(responseResult.value.errorCode)}`,
+          responseResult.value.errorCode,
+          isRetriableInitProducerIdError(responseResult.value.errorCode)
+        )
+      }
+
+      this.producerId = responseResult.value.producerId
+      this.producerEpoch = responseResult.value.producerEpoch
+      this.sequenceNumbers.clear()
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Get the next sequence number for a topic-partition and advance it by count.
+   *
+   * Returns the base sequence for the batch. Sequence numbers wrap at 2^31.
+   */
+  private nextSequence(topic: string, partition: number, count: number): number {
+    const key = `${topic}-${String(partition)}`
+    const current = this.sequenceNumbers.get(key) ?? 0
+    // Kafka sequence numbers are INT32, wrapping at 2^31
+    const next = (current + count) & 0x7fffffff
+    this.sequenceNumbers.set(key, next)
+    return current
   }
 
   // -------------------------------------------------------------------------
@@ -564,6 +705,7 @@ export class KafkaProducer {
 
     let promises: Promise<ProduceResult>[]
     try {
+      await this.ensureProducerId()
       const metadata = await this.getTopicMetadata(topic)
       const partitionCount = metadata.partitions.length
 
@@ -749,6 +891,14 @@ export class KafkaProducer {
         })
       }
 
+      // Idempotent producers require produce API v3+ (transactional_id field)
+      if (this.idempotent && produceVersion < 3) {
+        throw new KafkaConnectionError(
+          `idempotent producer requires produce api v3+, but broker only supports up to v${String(produceRange.maxVersion)}`,
+          { broker: conn.broker, retriable: false }
+        )
+      }
+
       // Build topic data with encoded record batches
       const topicData = this.buildTopicData(topic, partitions)
 
@@ -832,9 +982,17 @@ export class KafkaProducer {
         createRecord(msg.key, msg.value, msg.headers, i, msg.timestamp ?? 0n)
       )
 
+      const baseSequence = this.idempotent
+        ? this.nextSequence(topic, partitionIndex, records.length)
+        : undefined
+
       const batch = buildRecordBatch(records, {
         compression: this.compression,
-        baseTimestamp: messages[0].timestamp ?? BigInt(Date.now())
+        baseTimestamp: messages[0].timestamp ?? BigInt(Date.now()),
+        producerId: this.idempotent ? this.producerId : undefined,
+        producerEpoch: this.idempotent ? this.producerEpoch : undefined,
+        baseSequence,
+        isTransactional: this.transactionalId !== null
       })
 
       const encoded = encodeRecordBatch(batch)
@@ -984,6 +1142,23 @@ function isRetriableProduceError(errorCode: number): boolean {
     case 6: // NOT_LEADER_OR_FOLLOWER
     case 7: // REQUEST_TIMED_OUT
     case 19: // REBALANCE_IN_PROGRESS
+      return true
+    case 45: // DUPLICATE_SEQUENCE_NUMBER — idempotent duplicate (safe to treat as success-like)
+      return false
+    case 46: // OUT_OF_ORDER_SEQUENCE_NUMBER
+      return true
+    default:
+      return false
+  }
+}
+
+/**
+ * Retriable Kafka error codes for InitProducerId.
+ */
+function isRetriableInitProducerIdError(errorCode: number): boolean {
+  switch (errorCode) {
+    case 14: // COORDINATOR_NOT_AVAILABLE
+    case 15: // NOT_COORDINATOR
       return true
     default:
       return false

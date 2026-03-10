@@ -142,6 +142,31 @@ const STANDARD_APIS = [
   { apiKey: ApiKey.Produce, minVersion: 0, maxVersion: 8 }
 ]
 
+/** Standard APIs including InitProducerId for idempotent tests. */
+const STANDARD_APIS_WITH_INIT_PID = [
+  ...STANDARD_APIS,
+  { apiKey: ApiKey.InitProducerId, minVersion: 0, maxVersion: 4 }
+]
+
+/**
+ * Build an InitProducerId response body (flexible v4 format).
+ * Includes trailing tagged fields varint (0 = empty).
+ */
+function buildInitProducerIdBody(
+  producerId: bigint,
+  producerEpoch: number,
+  errorCode = 0,
+  throttleTimeMs = 0
+): Uint8Array {
+  const w = new BinaryWriter()
+  w.writeInt32(throttleTimeMs)
+  w.writeInt16(errorCode)
+  w.writeInt64(producerId)
+  w.writeInt16(producerEpoch)
+  w.writeUnsignedVarInt(0) // empty tagged fields (flexible v2+)
+  return w.finish()
+}
+
 /**
  * A mock connection that sequences through pre-built response bodies.
  * Each call to `send()` returns the next response as a BinaryReader.
@@ -959,8 +984,14 @@ describe("KafkaProducer send (integration path)", () => {
   })
 
   it("forces acks=All when idempotent is true", async () => {
-    const { pool } = createPoolWithBroker(
-      [
+    // For idempotent producers, we need an InitProducerId connection + metadata + produce
+    const initPidConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(1000n, 0)
+    ])
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildMetadataV1Body(TEST_BROKERS, [
         {
           errorCode: 0,
           name: "idemp-topic",
@@ -969,14 +1000,39 @@ describe("KafkaProducer send (integration path)", () => {
             { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
           ]
         }
-      ],
-      [
-        {
-          name: "idemp-topic",
-          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 5n }]
+      ])
+    ])
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildProduceResponseBody(
+        [
+          {
+            name: "idemp-topic",
+            partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 5n }]
+          }
+        ],
+        8
+      )
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let getConnCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCall++
+        // 1st call: InitProducerId, 2nd: metadata, 3rd: produce
+        if (getConnCall === 1) {
+          return initPidConn
         }
-      ]
-    )
+        if (getConnCall === 2) {
+          return metadataConn
+        }
+        return produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
 
     // Even though acks=1 is requested, idempotent forces All
     const producer = new KafkaProducer({
@@ -991,8 +1047,14 @@ describe("KafkaProducer send (integration path)", () => {
   })
 
   it("forces acks=All when transactionalId is set", async () => {
-    const { pool } = createPoolWithBroker(
-      [
+    // For transactional producers, need InitProducerId connection
+    const initPidConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(2000n, 0)
+    ])
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildMetadataV1Body(TEST_BROKERS, [
         {
           errorCode: 0,
           name: "tx-topic",
@@ -1001,14 +1063,38 @@ describe("KafkaProducer send (integration path)", () => {
             { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
           ]
         }
-      ],
-      [
-        {
-          name: "tx-topic",
-          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 7n }]
+      ])
+    ])
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildProduceResponseBody(
+        [
+          {
+            name: "tx-topic",
+            partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 7n }]
+          }
+        ],
+        8
+      )
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let getConnCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCall++
+        if (getConnCall === 1) {
+          return initPidConn
         }
-      ]
-    )
+        if (getConnCall === 2) {
+          return metadataConn
+        }
+        return produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
 
     const producer = new KafkaProducer({
       connectionPool: pool,
@@ -1944,5 +2030,306 @@ describe("KafkaProducer retry", () => {
     await expect(
       producer.send("no-config-retry", [{ key: null, value: encoder.encode("x") }])
     ).rejects.toThrow(KafkaProtocolError)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Idempotent producer
+// ---------------------------------------------------------------------------
+
+describe("KafkaProducer idempotent", () => {
+  const encoder = new TextEncoder()
+
+  /**
+   * Helper to create a pool with InitProducerId + metadata + produce connections
+   * for idempotent tests.
+   */
+  function createIdempotentPoolWithBroker(
+    metadataTopics: Parameters<typeof buildMetadataV1Body>[1],
+    produceTopics: Parameters<typeof buildProduceResponseBody>[0],
+    producerId = 1000n,
+    producerEpoch = 0,
+    produceApiVersion = 8
+  ): { pool: ConnectionPool; initPidConn: ReturnType<typeof createMockConnection> } {
+    const initPidConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(producerId, producerEpoch)
+    ])
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildMetadataV1Body(TEST_BROKERS, metadataTopics)
+    ])
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildProduceResponseBody(produceTopics, produceApiVersion)
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    let getConnCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCall++
+        // 1st: InitProducerId, 2nd: metadata, 3rd+: produce
+        if (getConnCall === 1) {
+          return initPidConn
+        }
+        if (getConnCall === 2) {
+          return metadataConn
+        }
+        return produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    return { pool, initPidConn }
+  }
+
+  it("calls InitProducerId on first send", async () => {
+    const { pool, initPidConn } = createIdempotentPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "pid-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "pid-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 10n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+    const results = await producer.send("pid-topic", [
+      { key: null, value: encoder.encode("hello") }
+    ])
+
+    expect(results).toHaveLength(1)
+    expect(results[0].baseOffset).toBe(10n)
+    // InitProducerId connection should have been called
+    expect(initPidConn.send).toHaveBeenCalledTimes(2) // ApiVersions + InitProducerId
+  })
+
+  it("does not call InitProducerId for non-idempotent producer", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "non-pid",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "non-pid",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 1n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({ connectionPool: pool })
+    const results = await producer.send("non-pid", [{ key: null, value: encoder.encode("hello") }])
+
+    expect(results).toHaveLength(1)
+  })
+
+  it("calls InitProducerId only once across multiple sends", async () => {
+    const initPidConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(1000n, 0)
+    ])
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "multi-send",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ])
+    ])
+    const produceConn1 = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildProduceResponseBody(
+        [
+          {
+            name: "multi-send",
+            partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 1n }]
+          }
+        ],
+        8
+      )
+    ])
+    const produceConn2 = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildProduceResponseBody(
+        [
+          {
+            name: "multi-send",
+            partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 2n }]
+          }
+        ],
+        8
+      )
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let getConnCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCall++
+        if (getConnCall === 1) {
+          return initPidConn
+        }
+        if (getConnCall === 2) {
+          return metadataConn
+        }
+        if (getConnCall === 3) {
+          return produceConn1
+        }
+        return produceConn2
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+
+    await producer.send("multi-send", [{ key: null, value: encoder.encode("first") }])
+    await producer.send("multi-send", [{ key: null, value: encoder.encode("second") }])
+
+    // InitProducerId should only be called once (2 send calls: ApiVersions + InitProdId)
+    expect(initPidConn.send).toHaveBeenCalledTimes(2)
+  })
+
+  it("sets default maxRetries to 5 for idempotent producer", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+    // Access private field for testing — verify default retry count is 5
+    expect((producer as unknown as Record<string, unknown>).maxRetries).toBe(5)
+  })
+
+  it("allows explicit maxRetries override for idempotent producer", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true,
+      retry: { maxRetries: 10 }
+    })
+    expect((producer as unknown as Record<string, unknown>).maxRetries).toBe(10)
+  })
+
+  it("enables idempotent when transactionalId is set", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "my-txn"
+    })
+    expect((producer as unknown as Record<string, unknown>).idempotent).toBe(true)
+  })
+
+  it("throws when InitProducerId returns error code", async () => {
+    const initPidConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(-1n, -1, 15) // NOT_COORDINATOR
+    ])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      getConnectionByNodeId: vi.fn(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async () => initPidConn
+      ) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+
+    await expect(
+      producer.send("any-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("init producer id failed")
+  })
+
+  it("throws when broker does not support InitProducerId api", async () => {
+    // Return APIs without InitProducerId
+    const initPidConn = createMockConnection([buildApiVersionsBody(STANDARD_APIS)])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      getConnectionByNodeId: vi.fn(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async () => initPidConn
+      ) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+
+    await expect(
+      producer.send("any-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("broker does not support init producer id api")
+  })
+
+  it("resets sequence numbers on close", async () => {
+    const { pool } = createIdempotentPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "close-seq",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "close-seq",
+          partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 1n }]
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+
+    await producer.send("close-seq", [{ key: null, value: encoder.encode("x") }])
+    await producer.close()
+
+    expect((producer as unknown as Record<string, unknown>).producerId).toBe(-1n)
+    expect((producer as unknown as Record<string, unknown>).producerEpoch).toBe(-1)
   })
 })

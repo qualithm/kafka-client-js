@@ -129,6 +129,14 @@ export {
   encodeProduceRequest
 } from "./produce.js"
 
+// InitProducerId API
+export type { InitProducerIdRequest, InitProducerIdResponse } from "./init-producer-id.js"
+export {
+  buildInitProducerIdRequest,
+  decodeInitProducerIdResponse,
+  encodeInitProducerIdRequest
+} from "./init-producer-id.js"
+
 // Record batches
 export type {
   CompressionProvider,
