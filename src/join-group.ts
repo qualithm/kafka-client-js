@@ -19,6 +19,7 @@
  * - v5: adds group_instance_id per member
  * - v6+: flexible encoding
  * - v7: adds protocol_type to response
+ * - v9: adds skip_assignment (KIP-814)
  *
  * @see https://kafka.apache.org/protocol.html#The_Messages_JoinGroup
  *
@@ -105,6 +106,8 @@ export type JoinGroupResponse = {
   readonly protocolName: string | null
   /** The leader member ID. */
   readonly leader: string
+  /** Whether the broker skipped assignment (v9+, KIP-814). */
+  readonly skipAssignment: boolean
   /** This member's assigned member ID. */
   readonly memberId: string
   /** Members in the group (only populated for the leader). */
@@ -305,6 +308,16 @@ export function decodeJoinGroupResponse(
     return leaderResult
   }
 
+  // skip_assignment (v9+, KIP-814)
+  let skipAssignment = false
+  if (apiVersion >= 9) {
+    const skipResult = reader.readBoolean()
+    if (!skipResult.ok) {
+      return skipResult
+    }
+    skipAssignment = skipResult.value
+  }
+
   // member_id
   const memberIdResult = isFlexible ? reader.readCompactString() : reader.readString()
   if (!memberIdResult.ok) {
@@ -335,6 +348,7 @@ export function decodeJoinGroupResponse(
       protocolType,
       protocolName: protocolNameResult.value,
       leader: leaderResult.value ?? "",
+      skipAssignment,
       memberId: memberIdResult.value ?? "",
       members: membersResult.value,
       taggedFields

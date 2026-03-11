@@ -281,8 +281,8 @@ const ErrorCode = {
   NONE: 0,
   OFFSET_OUT_OF_RANGE: 1,
   UNKNOWN_TOPIC_OR_PARTITION: 3,
-  NOT_COORDINATOR: 15,
   COORDINATOR_NOT_AVAILABLE: 15,
+  NOT_COORDINATOR: 16,
   ILLEGAL_GENERATION: 22,
   INCONSISTENT_GROUP_PROTOCOL: 23,
   UNKNOWN_MEMBER_ID: 25,
@@ -663,7 +663,11 @@ export class KafkaConsumer {
       this.isLeader = joinResult.value.leader === this.memberId
 
       // Compute assignments if leader
-      const assignments = this.isLeader ? this.assignPartitions(joinResult.value) : []
+      let assignments: SyncGroupAssignment[] = []
+      if (this.isLeader) {
+        await this.fetchTopicMetadataOn(conn)
+        assignments = this.assignPartitions(joinResult.value)
+      }
 
       // SyncGroup
       const syncGroupVersion = await this.negotiateApiVersion(conn, ApiKey.SyncGroup)
@@ -672,6 +676,8 @@ export class KafkaConsumer {
         generationId: this.generationId,
         memberId: this.memberId,
         groupInstanceId: this.groupInstanceId,
+        protocolType: joinResult.value.protocolType,
+        protocolName: joinResult.value.protocolName,
         assignments
       }
 
@@ -740,12 +746,13 @@ export class KafkaConsumer {
       members.push({ memberId: member.memberId, topics: memberMeta.topics })
     }
 
-    // Collect partition counts from pool metadata (may be empty)
+    // Get partition counts from cached topic metadata
     const partitionCounts = new Map<string, number>()
     for (const member of members) {
       for (const topic of member.topics) {
         if (!partitionCounts.has(topic)) {
-          partitionCounts.set(topic, 0)
+          const meta = this.topicMetadataCache.get(topic)
+          partitionCounts.set(topic, meta?.length ?? 0)
         }
       }
     }
@@ -1096,7 +1103,7 @@ export class KafkaConsumer {
       }
 
       const topics: FetchTopicRequest[] = [...topicMap.entries()].map(([topic, parts]) => ({
-        topic,
+        name: topic,
         partitions: parts.map((p) => ({
           partitionIndex: p.partition,
           fetchOffset: p.fetchOffset,
@@ -1490,6 +1497,39 @@ export class KafkaConsumer {
     }
 
     return version
+  }
+
+  /**
+   * Fetch topic metadata using an existing connection (avoids pool deadlock).
+   */
+  private async fetchTopicMetadataOn(conn: KafkaConnection): Promise<void> {
+    const metadataVersion = await this.negotiateApiVersion(conn, ApiKey.Metadata)
+
+    const responseReader = await conn.send(ApiKey.Metadata, metadataVersion, (writer) => {
+      encodeMetadataRequest(
+        writer,
+        {
+          topics: this.subscribedTopics.map((t) => ({ name: t })),
+          allowAutoTopicCreation: false
+        },
+        metadataVersion
+      )
+    })
+
+    const result = decodeMetadataResponse(responseReader, metadataVersion)
+    if (!result.ok) {
+      throw new KafkaConnectionError(
+        `failed to decode metadata response: ${result.error.message}`,
+        { broker: conn.broker }
+      )
+    }
+
+    this.topicMetadataCache.clear()
+    for (const topic of result.value.topics) {
+      if (topic.errorCode === 0) {
+        this.topicMetadataCache.set(topic.name ?? "", topic.partitions)
+      }
+    }
   }
 
   /**

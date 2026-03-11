@@ -1,7 +1,8 @@
 /**
  * Batch processing example.
  *
- * Demonstrates constructing batches of Kafka messages.
+ * Demonstrates constructing message batches and encoding them into
+ * Kafka RecordBatch format (the on-wire binary format).
  *
  * @example
  * ```bash
@@ -11,9 +12,18 @@
 
 /* eslint-disable no-console */
 
-import { type Message, parseBrokerAddress, type TopicPartition } from "../src/index"
+import {
+  buildRecordBatch,
+  createRecord,
+  decodeRecordBatch,
+  encodeRecordBatch,
+  type Message,
+  parseBrokerAddress,
+  type TopicPartition
+} from "../src/index"
 
 const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
 /**
  * Create a batch of messages for a topic-partition.
@@ -57,6 +67,32 @@ function main(): void {
     console.log(
       `    Key: ${String(msg.key?.byteLength)} bytes, Value: ${String(msg.value?.byteLength)} bytes`
     )
+  }
+  console.log()
+
+  // Encode messages into a Kafka RecordBatch (on-wire binary format)
+  console.log("--- RecordBatch Encoding ---")
+  const records = batch.messages.map((msg, i) =>
+    createRecord(msg.key ?? null, msg.value ?? null, [], i)
+  )
+  const recordBatch = buildRecordBatch(records)
+  const encoded = encodeRecordBatch(recordBatch)
+  console.log(`  Records: ${String(recordBatch.records.length)}`)
+  console.log(`  Encoded size: ${String(encoded.byteLength)} bytes`)
+  console.log()
+
+  // Decode the RecordBatch back
+  console.log("--- RecordBatch Decoding ---")
+  const decoded = decodeRecordBatch(encoded)
+  if (!decoded.ok) {
+    console.error(`  Decode failed: ${decoded.error.message}`)
+    return
+  }
+  console.log(`  Decoded records: ${String(decoded.value.records.length)}`)
+  for (const rec of decoded.value.records) {
+    const key = rec.key ? decoder.decode(rec.key) : "(null)"
+    const value = rec.value ? decoder.decode(rec.value) : "(null)"
+    console.log(`    Offset ${String(rec.offsetDelta)}: key=${key} value=${value}`)
   }
 
   console.log("\nExamples complete.")

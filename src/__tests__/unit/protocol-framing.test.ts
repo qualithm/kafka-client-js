@@ -159,8 +159,8 @@ describe("encodeRequestHeader", () => {
     })
   })
 
-  describe("v2 — flexible with compact strings and tagged fields", () => {
-    it("encodes header with compact string client ID and empty tagged fields", () => {
+  describe("v2 — flexible with tagged fields", () => {
+    it("encodes header with nullable string client ID and empty tagged fields", () => {
       const writer = new BinaryWriter()
       const header: RequestHeader = {
         apiKey: ApiKey.ApiVersions,
@@ -182,7 +182,7 @@ describe("encodeRequestHeader", () => {
       const corrId = reader.readInt32()
       expect(corrId.ok && corrId.value).toBe(200)
 
-      const clientId = reader.readCompactString()
+      const clientId = reader.readString()
       expect(clientId.ok).toBe(true)
       expect(clientId.ok && clientId.value).toBe("flex-client")
 
@@ -211,7 +211,7 @@ describe("encodeRequestHeader", () => {
       reader.readInt16() // api key
       reader.readInt16() // api version
       reader.readInt32() // correlation id
-      reader.readCompactString() // client id (null)
+      reader.readString() // client id (null)
 
       const tagged = reader.readTaggedFields()
       expect(tagged.ok).toBe(true)
@@ -259,8 +259,8 @@ describe("encodeRequestHeader", () => {
       reader.readInt16() // api version
       reader.readInt32() // correlation id
 
-      // v2 uses compact string
-      const clientId = reader.readCompactString()
+      // v2 still uses nullable string for client ID (KIP-482)
+      const clientId = reader.readString()
       expect(clientId.ok).toBe(true)
       expect(clientId.ok && clientId.value).toBe("auto-client")
 
@@ -604,8 +604,8 @@ describe("ApiVersions framing", () => {
     const corrId = reader.readInt32()
     expect(corrId.ok && corrId.value).toBe(2)
 
-    // v2 header: compact string
-    const clientId = reader.readCompactString()
+    // v2 header: nullable string (not compact — per KIP-482)
+    const clientId = reader.readString()
     expect(clientId.ok && clientId.value).toBe("flex")
 
     // v2 header: tagged fields

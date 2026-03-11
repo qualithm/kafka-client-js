@@ -11,7 +11,7 @@ bun run examples/basic-usage.ts
 # Error handling — error hierarchy and type narrowing
 bun run examples/error-handling.ts
 
-# Batch processing — constructing message batches
+# Batch processing — constructing and encoding record batches
 bun run examples/batch-processing.ts
 
 # Produce and consume — end-to-end with a live broker
@@ -24,5 +24,5 @@ bun run examples/produce-consume.ts
 | ------------------------------------------ | ------------------------------------------------- |
 | [basic-usage.ts](basic-usage.ts)           | Core types, broker parsing, version negotiation   |
 | [error-handling.ts](error-handling.ts)     | Error hierarchy and type narrowing                |
-| [batch-processing.ts](batch-processing.ts) | Constructing message batches for topic-partitions |
+| [batch-processing.ts](batch-processing.ts) | Constructing and encoding record batches          |
 | [produce-consume.ts](produce-consume.ts)   | End-to-end produce and consume with a live broker |

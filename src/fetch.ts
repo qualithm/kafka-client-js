@@ -70,6 +70,11 @@ export type FetchPartitionRequest = {
   /** The offset to fetch from. */
   readonly fetchOffset: bigint
   /**
+   * The last fetched epoch of the partition (v12+).
+   * Use -1 if unknown.
+   */
+  readonly lastFetchedEpoch?: number
+  /**
    * The earliest available offset of the follower replica (v5+).
    * Used only when the request is from a follower. Consumers should set -1.
    */
@@ -419,6 +424,11 @@ function encodePartitionRequest(
 
   // fetch_offset (INT64)
   writer.writeInt64(partition.fetchOffset)
+
+  // last_fetched_epoch (INT32, v12+)
+  if (apiVersion >= 12) {
+    writer.writeInt32(partition.lastFetchedEpoch ?? -1)
+  }
 
   // log_start_offset (INT64, v5+)
   if (apiVersion >= 5) {

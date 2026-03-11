@@ -300,6 +300,22 @@ function createJoinFlowMock(opts?: {
 
   const members = isLeader ? [{ memberId, metadata: memberMetadata }] : []
 
+  const metadataBody = buildMetadataV1Body(
+    [{ nodeId: 1, host: "localhost", port: 9092 }],
+    assignment.map((a) => ({
+      errorCode: 0,
+      name: a.topic,
+      isInternal: false,
+      partitions: a.partitions.map((p) => ({
+        errorCode: 0,
+        partitionIndex: p,
+        leaderId: 1,
+        replicaNodes: [1],
+        isrNodes: [1]
+      }))
+    }))
+  )
+
   const coordinatorResponses = [
     // FindCoordinator flow
     buildApiVersionsBody(STANDARD_APIS),
@@ -307,6 +323,8 @@ function createJoinFlowMock(opts?: {
     // JoinGroup flow
     buildApiVersionsBody(STANDARD_APIS),
     buildJoinGroupV0Body(0, 1, "range", isLeader ? memberId : "leader-1", memberId, members),
+    // Metadata for leader assignment (fetchTopicMetadataOn, only when leader)
+    ...(isLeader ? [buildApiVersionsBody(STANDARD_APIS), metadataBody] : []),
     // SyncGroup flow
     buildApiVersionsBody(STANDARD_APIS),
     buildSyncGroupV0Body(0, assignmentBytes),
@@ -326,24 +344,7 @@ function createJoinFlowMock(opts?: {
   ]
 
   // Metadata for topic refresh (used in fetchInitialOffsets)
-  const metadataResponses = [
-    buildApiVersionsBody(STANDARD_APIS),
-    buildMetadataV1Body(
-      [{ nodeId: 1, host: "localhost", port: 9092 }],
-      assignment.map((a) => ({
-        errorCode: 0,
-        name: a.topic,
-        isInternal: false,
-        partitions: a.partitions.map((p) => ({
-          errorCode: 0,
-          partitionIndex: p,
-          leaderId: 1,
-          replicaNodes: [1],
-          isrNodes: [1]
-        }))
-      }))
-    )
-  ]
+  const metadataResponses = [buildApiVersionsBody(STANDARD_APIS), metadataBody]
 
   // ListOffsets for offset reset
   const listOffsetsResponses = [
@@ -368,12 +369,19 @@ function createJoinFlowMock(opts?: {
   //
   // Actual sequence:
   //   1. ApiVersions + FindCoordinator (findCoordinator)
-  //   2. ApiVersions + JoinGroup + ApiVersions + SyncGroup (joinAndSync)
-  //   3. ApiVersions + Metadata (refreshTopicMetadata in fetchInitialOffsets)
-  //   4. ApiVersions + OffsetFetch (fetchInitialOffsets)
-  //   5. ApiVersions + ListOffsets (resetUncommittedOffsets, if needed)
-  const joinSyncResponses = coordinatorResponses.slice(0, 6) // FindCoordinator + JoinGroup + SyncGroup
-  const offsetFetchResponses = coordinatorResponses.slice(6) // OffsetFetch
+  //   2. ApiVersions + JoinGroup (joinAndSync)
+  //   2b. [leader only] ApiVersions + Metadata (fetchTopicMetadataOn)
+  //   3. ApiVersions + SyncGroup (joinAndSync)
+  //   4. ApiVersions + Metadata (refreshTopicMetadata in fetchInitialOffsets)
+  //   5. ApiVersions + OffsetFetch (fetchInitialOffsets)
+  //   6. ApiVersions + ListOffsets (resetUncommittedOffsets, if needed)
+  //
+  // coordinatorResponses already contains steps 1-3 and 5 in order.
+  // metadataResponses contains step 4.
+  // We split coordinatorResponses to interleave metadataResponses before OffsetFetch.
+  const joinSyncLen = isLeader ? 8 : 6 // FindCoordinator + JoinGroup + [leaderMetadata] + SyncGroup
+  const joinSyncResponses = coordinatorResponses.slice(0, joinSyncLen)
+  const offsetFetchResponses = coordinatorResponses.slice(joinSyncLen) // OffsetFetch
 
   const allResponses =
     committedOffset >= 0n
@@ -769,6 +777,20 @@ describe("KafkaConsumer", () => {
       ])
       const memberId = "leader-trunc"
 
+      const metadataBody = buildMetadataV1Body(
+        [{ nodeId: 1, host: "localhost", port: 9092 }],
+        [
+          {
+            errorCode: 0,
+            name: "test-topic",
+            isInternal: false,
+            partitions: [
+              { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+            ]
+          }
+        ]
+      )
+
       const allResponses = [
         // FindCoordinator
         buildApiVersionsBody(STANDARD_APIS),
@@ -778,24 +800,15 @@ describe("KafkaConsumer", () => {
         buildJoinGroupV0Body(0, 1, "range", memberId, memberId, [
           { memberId, metadata: truncatedMetadata }
         ]),
+        // Metadata for leader assignment (fetchTopicMetadataOn)
+        buildApiVersionsBody(STANDARD_APIS),
+        metadataBody,
         // SyncGroup
         buildApiVersionsBody(STANDARD_APIS),
         buildSyncGroupV0Body(0, assignmentBytes),
         // Metadata (refreshTopicMetadata)
         buildApiVersionsBody(STANDARD_APIS),
-        buildMetadataV1Body(
-          [{ nodeId: 1, host: "localhost", port: 9092 }],
-          [
-            {
-              errorCode: 0,
-              name: "test-topic",
-              isInternal: false,
-              partitions: [
-                { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
-              ]
-            }
-          ]
-        ),
+        metadataBody,
         // OffsetFetch
         buildApiVersionsBody(STANDARD_APIS),
         buildOffsetFetchV0Body([
@@ -838,6 +851,20 @@ describe("KafkaConsumer", () => {
       ])
       const memberId = "leader-empty"
 
+      const metadataBody = buildMetadataV1Body(
+        [{ nodeId: 1, host: "localhost", port: 9092 }],
+        [
+          {
+            errorCode: 0,
+            name: "test-topic",
+            isInternal: false,
+            partitions: [
+              { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+            ]
+          }
+        ]
+      )
+
       const allResponses = [
         buildApiVersionsBody(STANDARD_APIS),
         buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
@@ -845,22 +872,14 @@ describe("KafkaConsumer", () => {
         buildJoinGroupV0Body(0, 1, "range", memberId, memberId, [
           { memberId, metadata: emptyMetadata }
         ]),
+        // Metadata for leader assignment (fetchTopicMetadataOn)
+        buildApiVersionsBody(STANDARD_APIS),
+        metadataBody,
         buildApiVersionsBody(STANDARD_APIS),
         buildSyncGroupV0Body(0, assignmentBytes),
+        // Metadata (refreshTopicMetadata)
         buildApiVersionsBody(STANDARD_APIS),
-        buildMetadataV1Body(
-          [{ nodeId: 1, host: "localhost", port: 9092 }],
-          [
-            {
-              errorCode: 0,
-              name: "test-topic",
-              isInternal: false,
-              partitions: [
-                { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
-              ]
-            }
-          ]
-        ),
+        metadataBody,
         buildApiVersionsBody(STANDARD_APIS),
         buildOffsetFetchV0Body([
           {

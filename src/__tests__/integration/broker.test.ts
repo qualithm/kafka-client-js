@@ -166,7 +166,10 @@ describe("produce and consume", () => {
     await producer.close()
 
     // Consume messages
-    const consumer = kafka!.consumer({ groupId: `test-group-${String(Date.now())}` })
+    const consumer = kafka!.consumer({
+      groupId: `test-group-${String(Date.now())}`,
+      offsetReset: "earliest"
+    })
     consumer.subscribe([topicName])
     await consumer.connect()
 

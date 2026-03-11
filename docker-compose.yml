@@ -1,30 +1,55 @@
 # Integration Test Infrastructure
-
-# Kafka broker for integration tests.
-# Usage: docker compose up -d
+#
+# Usage (pick one):
+#   docker compose --profile redpanda up -d
+#   docker compose --profile kafka up -d
+#
 # Tear down: docker compose down -v
 
 services:
-  kafka:
-    image: apache/kafka:4.2.0
+  redpanda:
+    profiles: [redpanda]
+    image: redpandadata/redpanda:v25.3.10
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9093,external://0.0.0.0:9092
+      - --advertise-kafka-addr internal://redpanda:9093,external://localhost:9092
+      - --smp 1
+      - --memory 512M
+      - --mode dev-container
+      - --default-log-level=warn
     ports:
       - "9092:9092"
+    healthcheck:
+      test: rpk cluster health --api-urls localhost:9644 | grep -qi 'healthy.*true' || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+
+  kafka:
+    profiles: [kafka]
+    image: apache/kafka:4.2.0
+    hostname: kafka
     environment:
-      KAFKA_NODE_ID: 1
+      KAFKA_NODE_ID: "1"
       KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    ports:
+      - "9092:9092"
     healthcheck:
-      test: /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1
+      test:
+        /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null
+        2>&1 || exit 1
       interval: 5s
       timeout: 10s
       retries: 10

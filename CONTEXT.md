@@ -126,7 +126,6 @@ Registry, and Connect framework.
 | ----------- | ----------------------- |
 | `bench/`    | Benchmarks with stats   |
 | `examples/` | Runnable usage examples |
-| `scripts/`  | Development utilities   |
 | `src/`      | Source code             |
 
 ---

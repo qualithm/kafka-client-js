@@ -271,8 +271,8 @@ describe("buildMetadataRequest", () => {
     expect(corrIdResult.ok).toBe(true)
     expect(corrIdResult.ok && corrIdResult.value).toBe(42)
 
-    // Client ID (compact string, v2 header)
-    const clientIdResult = reader.readCompactString()
+    // Client ID (nullable string, v2 header per KIP-482)
+    const clientIdResult = reader.readString()
     expect(clientIdResult.ok).toBe(true)
     expect(clientIdResult.ok && clientIdResult.value).toBe("test-client")
 

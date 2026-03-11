@@ -211,7 +211,7 @@ describe("property-based: request header v2 (flexible)", () => {
           const readApiKey = reader.readInt16()
           const readVersion = reader.readInt16()
           const readCorrId = reader.readInt32()
-          const readClientId = reader.readCompactString()
+          const readClientId = reader.readString()
           const readTagged = reader.readTaggedFields()
 
           expect(readApiKey.ok && readApiKey.value).toBe(apiKey)

@@ -141,8 +141,10 @@ export function encodeRequestHeader(
     return
   }
 
-  // v2 (flexible): compact nullable string client ID + tagged fields
-  writer.writeCompactString(header.clientId ?? null)
+  // v2 (flexible): client ID is still a regular nullable string (INT16 prefix)
+  // even in header v2 — this allows the broker to determine the header version
+  // for unknown request types (KIP-482)
+  writer.writeString(header.clientId ?? null)
   writer.writeTaggedFields(header.taggedFields ?? [])
 }
 

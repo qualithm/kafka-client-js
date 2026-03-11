@@ -65,6 +65,7 @@ function runBenchmark(
   // Execute benchmark in batches for timing
   const batchSize = Math.max(1, Math.floor(iterations / 100))
   const batchTimes: number[] = []
+  let totalMs = 0
 
   let remaining = iterations
   while (remaining > 0) {
@@ -73,13 +74,13 @@ function runBenchmark(
     for (let i = 0; i < batch; i++) {
       fn()
     }
-    const end = performance.now()
-    batchTimes.push((end - start) / batch)
+    const elapsed = performance.now() - start
+    totalMs += elapsed
+    batchTimes.push(elapsed / batch)
     remaining -= batch
   }
 
   const stats = calculateStats(batchTimes)
-  const totalMs = batchTimes.reduce((a, b) => a + b, 0) * batchSize
 
   return {
     name,

@@ -468,6 +468,8 @@ describe("encodeFetchRequest", () => {
       reader.readInt32()
       // fetch_offset
       reader.readInt64()
+      // last_fetched_epoch (v12+)
+      reader.readInt32()
       // log_start_offset
       reader.readInt64()
       // partition_max_bytes
@@ -542,6 +544,7 @@ describe("encodeFetchRequest", () => {
       reader.readInt32() // partition_index
       reader.readInt32() // current_leader_epoch
       reader.readInt64() // fetch_offset
+      reader.readInt32() // last_fetched_epoch (v12+)
       reader.readInt64() // log_start_offset
       reader.readInt32() // partition_max_bytes
       reader.readTaggedFields() // partition tags
