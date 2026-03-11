@@ -8,8 +8,8 @@
  *   import { getBroker, createIntegrationConnection, isKafkaAvailable } from "./setup"
  */
 
-import { createNodeSocketFactory } from "../../node-socket"
-import type { SocketFactory } from "../../socket"
+import { createNodeSocketFactory } from "../../network/node-socket"
+import type { SocketFactory } from "../../network/socket"
 
 // ---------------------------------------------------------------------------
 // Configuration

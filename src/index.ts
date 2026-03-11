@@ -38,19 +38,19 @@ export type {
 } from "./messages.js"
 
 // Protocol
-export type { ApiVersionRange, FlexibleVersionThreshold } from "./api-keys.js"
+export type { ApiVersionRange, FlexibleVersionThreshold } from "./codec/api-keys.js"
 export {
   ApiKey,
   CLIENT_API_VERSIONS,
   FLEXIBLE_VERSION_THRESHOLDS,
   isFlexibleVersion,
   negotiateVersion
-} from "./api-keys.js"
+} from "./codec/api-keys.js"
 
 // Binary codec
-export type { TaggedField } from "./binary-reader.js"
-export { BinaryReader } from "./binary-reader.js"
-export { BinaryWriter } from "./binary-writer.js"
+export type { TaggedField } from "./codec/binary-reader.js"
+export { BinaryReader } from "./codec/binary-reader.js"
+export { BinaryWriter } from "./codec/binary-writer.js"
 
 // Protocol framing
 export type {
@@ -58,7 +58,7 @@ export type {
   RequestHeaderVersion,
   ResponseHeader,
   ResponseHeaderVersion
-} from "./protocol-framing.js"
+} from "./codec/protocol-framing.js"
 export {
   decodeResponseHeader,
   encodeRequestHeader,
@@ -66,27 +66,31 @@ export {
   readResponseFrame,
   requestHeaderVersion,
   responseHeaderVersion
-} from "./protocol-framing.js"
+} from "./codec/protocol-framing.js"
 
 // API messages
-export type { ApiVersionEntry, ApiVersionsRequest, ApiVersionsResponse } from "./api-versions.js"
+export type {
+  ApiVersionEntry,
+  ApiVersionsRequest,
+  ApiVersionsResponse
+} from "./protocol/api-versions.js"
 export {
   apiVersionsToMap,
   buildApiVersionsRequest,
   decodeApiVersionsResponse,
   encodeApiVersionsRequest
-} from "./api-versions.js"
+} from "./protocol/api-versions.js"
 export type {
   Coordinator,
   FindCoordinatorRequest,
   FindCoordinatorResponse
-} from "./find-coordinator.js"
+} from "./protocol/find-coordinator.js"
 export {
   buildFindCoordinatorRequest,
   CoordinatorType,
   decodeFindCoordinatorResponse,
   encodeFindCoordinatorRequest
-} from "./find-coordinator.js"
+} from "./protocol/find-coordinator.js"
 export type {
   ListOffsetsPartitionRequest,
   ListOffsetsPartitionResponse,
@@ -94,14 +98,14 @@ export type {
   ListOffsetsResponse,
   ListOffsetsTopicRequest,
   ListOffsetsTopicResponse
-} from "./list-offsets.js"
+} from "./protocol/list-offsets.js"
 export {
   buildListOffsetsRequest,
   decodeListOffsetsResponse,
   encodeListOffsetsRequest,
   IsolationLevel,
   OffsetTimestamp
-} from "./list-offsets.js"
+} from "./protocol/list-offsets.js"
 export type {
   MetadataBroker,
   MetadataPartition,
@@ -109,8 +113,12 @@ export type {
   MetadataRequestTopic,
   MetadataResponse,
   MetadataTopic
-} from "./metadata.js"
-export { buildMetadataRequest, decodeMetadataResponse, encodeMetadataRequest } from "./metadata.js"
+} from "./protocol/metadata.js"
+export {
+  buildMetadataRequest,
+  decodeMetadataResponse,
+  encodeMetadataRequest
+} from "./protocol/metadata.js"
 
 // Fetch API
 export type {
@@ -122,13 +130,13 @@ export type {
   FetchTopicRequest,
   FetchTopicResponse,
   ForgottenTopic
-} from "./fetch.js"
+} from "./protocol/fetch.js"
 export {
   buildFetchRequest,
   decodeFetchResponse,
   encodeFetchRequest,
   FetchIsolationLevel
-} from "./fetch.js"
+} from "./protocol/fetch.js"
 
 // Produce API
 export type {
@@ -139,21 +147,21 @@ export type {
   ProduceResponse,
   ProduceTopicData,
   ProduceTopicResponse
-} from "./produce.js"
+} from "./protocol/produce.js"
 export {
   Acks,
   buildProduceRequest,
   decodeProduceResponse,
   encodeProduceRequest
-} from "./produce.js"
+} from "./protocol/produce.js"
 
 // InitProducerId API
-export type { InitProducerIdRequest, InitProducerIdResponse } from "./init-producer-id.js"
+export type { InitProducerIdRequest, InitProducerIdResponse } from "./protocol/init-producer-id.js"
 export {
   buildInitProducerIdRequest,
   decodeInitProducerIdResponse,
   encodeInitProducerIdRequest
-} from "./init-producer-id.js"
+} from "./protocol/init-producer-id.js"
 
 // Record batches
 export type {
@@ -162,7 +170,7 @@ export type {
   RecordBatch,
   RecordBatchAttributes,
   RecordBatchOptions
-} from "./record-batch.js"
+} from "./codec/record-batch.js"
 export {
   buildRecordBatch,
   CompressionCodec,
@@ -178,7 +186,7 @@ export {
   RECORD_BATCH_METADATA_SIZE,
   registerCompressionProvider,
   TimestampType
-} from "./record-batch.js"
+} from "./codec/record-batch.js"
 
 // Compression providers
 export {
@@ -190,27 +198,27 @@ export {
   type Lz4Codec,
   type SnappyCodec,
   type ZstdCodec
-} from "./compression.js"
+} from "./codec/compression.js"
 
 // Socket adapter
-export type { KafkaSocket, SocketConnectOptions, SocketFactory } from "./socket.js"
+export type { KafkaSocket, SocketConnectOptions, SocketFactory } from "./network/socket.js"
 
 // Bun socket adapter
-export { createBunSocketFactory } from "./bun-socket.js"
+export { createBunSocketFactory } from "./network/bun-socket.js"
 
 // Node.js socket adapter
-export { createNodeSocketFactory } from "./node-socket.js"
+export { createNodeSocketFactory } from "./network/node-socket.js"
 
 // Deno socket adapter
-export { createDenoSocketFactory } from "./deno-socket.js"
+export { createDenoSocketFactory } from "./network/deno-socket.js"
 
 // Connection
-export type { ConnectionOptions } from "./connection.js"
-export { KafkaConnection } from "./connection.js"
+export type { ConnectionOptions } from "./network/connection.js"
+export { KafkaConnection } from "./network/connection.js"
 
 // Broker pool & discovery
-export type { BrokerInfo, ConnectionPoolOptions, ReconnectStrategy } from "./broker-pool.js"
-export { ConnectionPool, discoverBrokers } from "./broker-pool.js"
+export type { BrokerInfo, ConnectionPoolOptions, ReconnectStrategy } from "./network/broker-pool.js"
+export { ConnectionPool, discoverBrokers } from "./network/broker-pool.js"
 
 // Kafka client
 export type {
@@ -219,8 +227,8 @@ export type {
   KafkaOptions,
   KafkaProducerOptions,
   KafkaState
-} from "./kafka.js"
-export { createKafka, Kafka } from "./kafka.js"
+} from "./client/kafka.js"
+export { createKafka, Kafka } from "./client/kafka.js"
 
 // Producer
 export type {
@@ -229,17 +237,21 @@ export type {
   ProducerOptions,
   RetryConfig,
   TopicPartitionOffset
-} from "./producer.js"
+} from "./client/producer.js"
 export {
   createProducer,
   defaultPartitioner,
   KafkaProducer,
   roundRobinPartitioner
-} from "./producer.js"
+} from "./client/producer.js"
 
 // Partition assignors
-export type { MemberAssignment, MemberSubscription, PartitionAssignor } from "./assignors.js"
-export { createCooperativeStickyAssignor, rangeAssignor, roundRobinAssignor } from "./assignors.js"
+export type { MemberAssignment, MemberSubscription, PartitionAssignor } from "./client/assignors.js"
+export {
+  createCooperativeStickyAssignor,
+  rangeAssignor,
+  roundRobinAssignor
+} from "./client/assignors.js"
 
 // Consumer
 export type {
@@ -247,8 +259,8 @@ export type {
   ConsumerOptions,
   ConsumerRetryConfig,
   RebalanceListener
-} from "./consumer.js"
-export { createConsumer, KafkaConsumer, OffsetResetStrategy } from "./consumer.js"
+} from "./client/consumer.js"
+export { createConsumer, KafkaConsumer, OffsetResetStrategy } from "./client/consumer.js"
 
 // OffsetCommit API
 export type {
@@ -258,12 +270,12 @@ export type {
   OffsetCommitResponse,
   OffsetCommitTopicRequest,
   OffsetCommitTopicResponse
-} from "./offset-commit.js"
+} from "./protocol/offset-commit.js"
 export {
   buildOffsetCommitRequest,
   decodeOffsetCommitResponse,
   encodeOffsetCommitRequest
-} from "./offset-commit.js"
+} from "./protocol/offset-commit.js"
 
 // OffsetFetch API
 export type {
@@ -272,12 +284,12 @@ export type {
   OffsetFetchResponse,
   OffsetFetchTopicRequest,
   OffsetFetchTopicResponse
-} from "./offset-fetch.js"
+} from "./protocol/offset-fetch.js"
 export {
   buildOffsetFetchRequest,
   decodeOffsetFetchResponse,
   encodeOffsetFetchRequest
-} from "./offset-fetch.js"
+} from "./protocol/offset-fetch.js"
 
 // JoinGroup API
 export type {
@@ -285,28 +297,32 @@ export type {
   JoinGroupProtocol,
   JoinGroupRequest,
   JoinGroupResponse
-} from "./join-group.js"
+} from "./protocol/join-group.js"
 export {
   buildJoinGroupRequest,
   decodeJoinGroupResponse,
   encodeJoinGroupRequest
-} from "./join-group.js"
+} from "./protocol/join-group.js"
 
 // SyncGroup API
-export type { SyncGroupAssignment, SyncGroupRequest, SyncGroupResponse } from "./sync-group.js"
+export type {
+  SyncGroupAssignment,
+  SyncGroupRequest,
+  SyncGroupResponse
+} from "./protocol/sync-group.js"
 export {
   buildSyncGroupRequest,
   decodeSyncGroupResponse,
   encodeSyncGroupRequest
-} from "./sync-group.js"
+} from "./protocol/sync-group.js"
 
 // Heartbeat API
-export type { HeartbeatRequest, HeartbeatResponse } from "./heartbeat.js"
+export type { HeartbeatRequest, HeartbeatResponse } from "./protocol/heartbeat.js"
 export {
   buildHeartbeatRequest,
   decodeHeartbeatResponse,
   encodeHeartbeatRequest
-} from "./heartbeat.js"
+} from "./protocol/heartbeat.js"
 
 // LeaveGroup API
 export type {
@@ -314,40 +330,43 @@ export type {
   LeaveGroupMemberResponse,
   LeaveGroupRequest,
   LeaveGroupResponse
-} from "./leave-group.js"
+} from "./protocol/leave-group.js"
 export {
   buildLeaveGroupRequest,
   decodeLeaveGroupResponse,
   encodeLeaveGroupRequest
-} from "./leave-group.js"
+} from "./protocol/leave-group.js"
 
 // SaslHandshake API
-export type { SaslHandshakeRequest, SaslHandshakeResponse } from "./sasl-handshake.js"
+export type { SaslHandshakeRequest, SaslHandshakeResponse } from "./protocol/sasl-handshake.js"
 export {
   buildSaslHandshakeRequest,
   decodeSaslHandshakeResponse,
   encodeSaslHandshakeRequest
-} from "./sasl-handshake.js"
+} from "./protocol/sasl-handshake.js"
 
 // SaslAuthenticate API
-export type { SaslAuthenticateRequest, SaslAuthenticateResponse } from "./sasl-authenticate.js"
+export type {
+  SaslAuthenticateRequest,
+  SaslAuthenticateResponse
+} from "./protocol/sasl-authenticate.js"
 export {
   buildSaslAuthenticateRequest,
   decodeSaslAuthenticateResponse,
   encodeSaslAuthenticateRequest
-} from "./sasl-authenticate.js"
+} from "./protocol/sasl-authenticate.js"
 
 // SASL mechanisms
-export type { SaslAuthenticator, ScramAlgorithm } from "./sasl.js"
+export type { SaslAuthenticator, ScramAlgorithm } from "./network/sasl.js"
 export {
   createPlainAuthenticator,
   createSaslAuthenticator,
   createScramAuthenticator
-} from "./sasl.js"
+} from "./network/sasl.js"
 
 // Admin client
-export type { AdminOptions, AdminRetryConfig, TopicInfo } from "./admin.js"
-export { createAdmin, KafkaAdmin } from "./admin.js"
+export type { AdminOptions, AdminRetryConfig, TopicInfo } from "./client/admin.js"
+export { createAdmin, KafkaAdmin } from "./client/admin.js"
 
 // CreateTopics API
 export type {
@@ -358,12 +377,12 @@ export type {
   CreateTopicsResponse,
   CreateTopicsResponseConfigEntry,
   CreateTopicsTopicResponse
-} from "./create-topics.js"
+} from "./protocol/create-topics.js"
 export {
   buildCreateTopicsRequest,
   decodeCreateTopicsResponse,
   encodeCreateTopicsRequest
-} from "./create-topics.js"
+} from "./protocol/create-topics.js"
 
 // DeleteTopics API
 export type {
@@ -371,12 +390,12 @@ export type {
   DeleteTopicsResponse,
   DeleteTopicState,
   DeleteTopicsTopicResponse
-} from "./delete-topics.js"
+} from "./protocol/delete-topics.js"
 export {
   buildDeleteTopicsRequest,
   decodeDeleteTopicsResponse,
   encodeDeleteTopicsRequest
-} from "./delete-topics.js"
+} from "./protocol/delete-topics.js"
 
 // CreatePartitions API
 export type {
@@ -385,12 +404,12 @@ export type {
   CreatePartitionsResponse,
   CreatePartitionsTopicRequest,
   CreatePartitionsTopicResponse
-} from "./create-partitions.js"
+} from "./protocol/create-partitions.js"
 export {
   buildCreatePartitionsRequest,
   decodeCreatePartitionsResponse,
   encodeCreatePartitionsRequest
-} from "./create-partitions.js"
+} from "./protocol/create-partitions.js"
 
 // DescribeConfigs API
 export type {
@@ -400,13 +419,13 @@ export type {
   DescribeConfigsResource,
   DescribeConfigsResourceResponse,
   DescribeConfigsResponse
-} from "./describe-configs.js"
+} from "./protocol/describe-configs.js"
 export {
   buildDescribeConfigsRequest,
   ConfigResourceType,
   decodeDescribeConfigsResponse,
   encodeDescribeConfigsRequest
-} from "./describe-configs.js"
+} from "./protocol/describe-configs.js"
 
 // AlterConfigs API
 export type {
@@ -415,12 +434,12 @@ export type {
   AlterConfigsResource,
   AlterConfigsResourceResponse,
   AlterConfigsResponse
-} from "./alter-configs.js"
+} from "./protocol/alter-configs.js"
 export {
   buildAlterConfigsRequest,
   decodeAlterConfigsResponse,
   encodeAlterConfigsRequest
-} from "./alter-configs.js"
+} from "./protocol/alter-configs.js"
 
 // Serialization
 export type {
@@ -430,8 +449,8 @@ export type {
   Deserializer,
   Serde,
   Serializer
-} from "./serialization.js"
-export { jsonSerializer, stringSerializer } from "./serialization.js"
+} from "./serialization/serialization.js"
+export { jsonSerializer, stringSerializer } from "./serialization/serialization.js"
 
 // Schema Registry
 export type {
@@ -439,7 +458,7 @@ export type {
   SchemaRegistryConfig,
   SchemaType,
   SubjectNameStrategy
-} from "./schema-registry.js"
+} from "./serialization/schema-registry.js"
 export {
   decodeWireFormatHeader,
   encodeWireFormatHeader,
@@ -450,15 +469,19 @@ export {
   topicRecordNameStrategy,
   WIRE_FORMAT_HEADER_SIZE,
   WIRE_FORMAT_MAGIC
-} from "./schema-registry.js"
+} from "./serialization/schema-registry.js"
 
 // Avro serializer
-export type { AvroCodec, AvroSchema, AvroSerdeOptions } from "./avro-serializer.js"
-export { createAvroSerde } from "./avro-serializer.js"
+export type { AvroCodec, AvroSchema, AvroSerdeOptions } from "./serialization/avro-serializer.js"
+export { createAvroSerde } from "./serialization/avro-serializer.js"
 
 // Protobuf serializer
-export type { ProtobufCodec, ProtobufSchema, ProtobufSerdeOptions } from "./protobuf-serializer.js"
-export { createProtobufSerde } from "./protobuf-serializer.js"
+export type {
+  ProtobufCodec,
+  ProtobufSchema,
+  ProtobufSerdeOptions
+} from "./serialization/protobuf-serializer.js"
+export { createProtobufSerde } from "./serialization/protobuf-serializer.js"
 
 // AddPartitionsToTxn API
 export type {
@@ -467,24 +490,31 @@ export type {
   AddPartitionsToTxnResponse,
   AddPartitionsToTxnTopic,
   AddPartitionsToTxnTopicResult
-} from "./add-partitions-to-txn.js"
+} from "./protocol/add-partitions-to-txn.js"
 export {
   buildAddPartitionsToTxnRequest,
   decodeAddPartitionsToTxnResponse,
   encodeAddPartitionsToTxnRequest
-} from "./add-partitions-to-txn.js"
+} from "./protocol/add-partitions-to-txn.js"
 
 // AddOffsetsToTxn API
-export type { AddOffsetsToTxnRequest, AddOffsetsToTxnResponse } from "./add-offsets-to-txn.js"
+export type {
+  AddOffsetsToTxnRequest,
+  AddOffsetsToTxnResponse
+} from "./protocol/add-offsets-to-txn.js"
 export {
   buildAddOffsetsToTxnRequest,
   decodeAddOffsetsToTxnResponse,
   encodeAddOffsetsToTxnRequest
-} from "./add-offsets-to-txn.js"
+} from "./protocol/add-offsets-to-txn.js"
 
 // EndTxn API
-export type { EndTxnRequest, EndTxnResponse } from "./end-txn.js"
-export { buildEndTxnRequest, decodeEndTxnResponse, encodeEndTxnRequest } from "./end-txn.js"
+export type { EndTxnRequest, EndTxnResponse } from "./protocol/end-txn.js"
+export {
+  buildEndTxnRequest,
+  decodeEndTxnResponse,
+  encodeEndTxnRequest
+} from "./protocol/end-txn.js"
 
 // TxnOffsetCommit API
 export type {
@@ -494,9 +524,9 @@ export type {
   TxnOffsetCommitResponse,
   TxnOffsetCommitTopicRequest,
   TxnOffsetCommitTopicResponse
-} from "./txn-offset-commit.js"
+} from "./protocol/txn-offset-commit.js"
 export {
   buildTxnOffsetCommitRequest,
   decodeTxnOffsetCommitResponse,
   encodeTxnOffsetCommitRequest
-} from "./txn-offset-commit.js"
+} from "./protocol/txn-offset-commit.js"

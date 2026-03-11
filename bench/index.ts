@@ -9,14 +9,14 @@
 
 /* eslint-disable no-console */
 
-import { BinaryReader } from "../src/binary-reader"
-import { BinaryWriter } from "../src/binary-writer"
+import { BinaryReader } from "../src/codec/binary-reader"
+import { BinaryWriter } from "../src/codec/binary-writer"
 import {
   buildRecordBatch,
   createRecord,
   decodeRecordBatch,
   encodeRecordBatch
-} from "../src/record-batch"
+} from "../src/codec/record-batch"
 
 const config = {
   warmupIterations: parseInt(process.env.WARMUP_ITERATIONS ?? "15", 10),

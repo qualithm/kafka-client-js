@@ -9,7 +9,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { createKafka, type Kafka } from "../../kafka"
+import { createKafka, type Kafka } from "../../client/kafka"
 import type { ConsumerRecord } from "../../messages"
 import { getBroker, getSocketFactory, isKafkaAvailable } from "./setup"
 
