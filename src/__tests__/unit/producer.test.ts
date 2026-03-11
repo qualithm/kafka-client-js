@@ -322,6 +322,42 @@ describe("defaultPartitioner", () => {
       expect(partition).toBeLessThan(6)
     }
   })
+
+  it("hashes key with byteLength % 4 == 1 (trailing 1 byte)", () => {
+    const partitioner = defaultPartitioner()
+    // "a" = 1 byte → length % 4 == 1: hits case 1 in murmur2
+    const key = new Uint8Array([0x61])
+    const partition = partitioner("topic", key, 100)
+    expect(partition).toBeGreaterThanOrEqual(0)
+    expect(partition).toBeLessThan(100)
+  })
+
+  it("hashes key with byteLength % 4 == 2 (trailing 2 bytes)", () => {
+    const partitioner = defaultPartitioner()
+    // "ab" = 2 bytes → length % 4 == 2: hits case 2 in murmur2
+    const key = new Uint8Array([0x61, 0x62])
+    const partition = partitioner("topic", key, 100)
+    expect(partition).toBeGreaterThanOrEqual(0)
+    expect(partition).toBeLessThan(100)
+  })
+
+  it("hashes key with byteLength % 4 == 3 (trailing 3 bytes)", () => {
+    const partitioner = defaultPartitioner()
+    // "abc" = 3 bytes → length % 4 == 3: hits case 3 in murmur2
+    const key = new Uint8Array([0x61, 0x62, 0x63])
+    const partition = partitioner("topic", key, 100)
+    expect(partition).toBeGreaterThanOrEqual(0)
+    expect(partition).toBeLessThan(100)
+  })
+
+  it("hashes key with byteLength % 4 == 0 (no trailing bytes)", () => {
+    const partitioner = defaultPartitioner()
+    // "abcd" = 4 bytes → length % 4 == 0: default case (no switch branch)
+    const key = new Uint8Array([0x61, 0x62, 0x63, 0x64])
+    const partition = partitioner("topic", key, 100)
+    expect(partition).toBeGreaterThanOrEqual(0)
+    expect(partition).toBeLessThan(100)
+  })
 })
 
 describe("roundRobinPartitioner", () => {
@@ -1046,64 +1082,15 @@ describe("KafkaProducer send (integration path)", () => {
     expect(results[0].baseOffset).toBe(5n)
   })
 
-  it("forces acks=All when transactionalId is set", async () => {
-    // For transactional producers, need InitProducerId connection
-    const initPidConn = createMockConnection([
-      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
-      buildInitProducerIdBody(2000n, 0)
-    ])
-    const metadataConn = createMockConnection([
-      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
-      buildMetadataV1Body(TEST_BROKERS, [
-        {
-          errorCode: 0,
-          name: "tx-topic",
-          isInternal: false,
-          partitions: [
-            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
-          ]
-        }
-      ])
-    ])
-    const produceConn = createMockConnection([
-      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
-      buildProduceResponseBody(
-        [
-          {
-            name: "tx-topic",
-            partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 7n }]
-          }
-        ],
-        8
-      )
-    ])
-
-    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
-    let getConnCall = 0
-    const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
-      getConnectionByNodeId: vi.fn(async () => {
-        getConnCall++
-        if (getConnCall === 1) {
-          return initPidConn
-        }
-        if (getConnCall === 2) {
-          return metadataConn
-        }
-        return produceConn
-      }) as unknown as ConnectionPool["getConnectionByNodeId"],
-      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
-    })
-
+  it("forces acks=All when transactionalId is set", () => {
+    const pool = createMockPool()
     const producer = new KafkaProducer({
       connectionPool: pool,
       acks: Acks.None,
       transactionalId: "tx-1"
     })
-    const results = await producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
-    // Should NOT be fire-and-forget — acks forced to All
-    expect(results[0].baseOffset).toBe(7n)
+    // Acks are forced to All for transactional producers
+    expect((producer as unknown as Record<string, unknown>).acks).toBe(Acks.All)
   })
 
   it("throws when metadata retriable error occurs", async () => {
@@ -2389,5 +2376,1133 @@ describe("KafkaProducer idempotent", () => {
 
     expect((producer as unknown as Record<string, unknown>).producerId).toBe(-1n)
     expect((producer as unknown as Record<string, unknown>).producerEpoch).toBe(-1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Transactional producer
+// ---------------------------------------------------------------------------
+
+describe("KafkaProducer transactional", () => {
+  const encoder = new TextEncoder()
+
+  /**
+   * API versions for transactional producer tests.
+   * maxVersion is kept below flexible-encoding thresholds so our
+   * hand-built response helpers stay simple (no tagged-field suffix).
+   */
+  const txnApis = [
+    { apiKey: ApiKey.ApiVersions, minVersion: 0, maxVersion: 2 },
+    { apiKey: ApiKey.Metadata, minVersion: 0, maxVersion: 1 },
+    { apiKey: ApiKey.Produce, minVersion: 0, maxVersion: 8 },
+    { apiKey: ApiKey.InitProducerId, minVersion: 0, maxVersion: 1 },
+    { apiKey: ApiKey.FindCoordinator, minVersion: 0, maxVersion: 2 },
+    { apiKey: ApiKey.AddPartitionsToTxn, minVersion: 0, maxVersion: 2 },
+    { apiKey: ApiKey.EndTxn, minVersion: 0, maxVersion: 2 },
+    { apiKey: ApiKey.AddOffsetsToTxn, minVersion: 0, maxVersion: 2 },
+    { apiKey: ApiKey.TxnOffsetCommit, minVersion: 0, maxVersion: 2 }
+  ]
+
+  /** Build a FindCoordinator v1–v2 response body (includes throttle + error message). */
+  function buildFindCoordinatorBody(
+    nodeId: number,
+    host: string,
+    port: number,
+    errorCode = 0
+  ): Uint8Array {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(errorCode) // error_code
+    w.writeString(null) // error_message (nullable string)
+    w.writeInt32(nodeId) // node_id
+    w.writeString(host) // host
+    w.writeInt32(port) // port
+    return w.finish()
+  }
+
+  /** Build an AddPartitionsToTxn v0 response body. */
+  function buildAddPartitionsToTxnBody(
+    topics: { name: string; partitions: { partitionIndex: number; errorCode: number }[] }[]
+  ): Uint8Array {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt32(topics.length) // topics count
+    for (const topic of topics) {
+      w.writeString(topic.name)
+      w.writeInt32(topic.partitions.length)
+      for (const p of topic.partitions) {
+        w.writeInt32(p.partitionIndex)
+        w.writeInt16(p.errorCode)
+      }
+    }
+    return w.finish()
+  }
+
+  /** Build an EndTxn v0 response body. */
+  function buildEndTxnBody(errorCode = 0, throttleTimeMs = 0): Uint8Array {
+    const w = new BinaryWriter()
+    w.writeInt32(throttleTimeMs)
+    w.writeInt16(errorCode)
+    return w.finish()
+  }
+
+  /**
+   * Build coordinator responses for the standard transactional send flow:
+   * FindCoordinator → InitProducerId → AddPartitionsToTxn.
+   * Optionally appends EndTxn responses.
+   */
+  function buildCoordinatorResponses(
+    metadataTopics: Parameters<typeof buildMetadataV1Body>[1],
+    options?: { endTxnErrorCode?: number; producerId?: bigint; producerEpoch?: number }
+  ): Uint8Array[] {
+    const responses: Uint8Array[] = [
+      // FindCoordinator discovery
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(1, "localhost", 9092),
+      // InitProducerId via coordinator
+      buildApiVersionsBody(txnApis),
+      buildInitProducerIdBody(options?.producerId ?? 3000n, options?.producerEpoch ?? 0),
+      // AddPartitionsToTxn
+      buildApiVersionsBody(txnApis),
+      buildAddPartitionsToTxnBody(
+        metadataTopics.map((t) => ({
+          name: t.name,
+          partitions: t.partitions.map((p) => ({
+            partitionIndex: p.partitionIndex,
+            errorCode: 0
+          }))
+        }))
+      )
+    ]
+
+    if (options?.endTxnErrorCode !== undefined) {
+      responses.push(buildApiVersionsBody(txnApis), buildEndTxnBody(options.endTxnErrorCode))
+    }
+
+    return responses
+  }
+
+  /** Standard metadata topic used by most transactional tests. */
+  const standardMetaTopic = [
+    {
+      errorCode: 0,
+      name: "tx-topic",
+      isInternal: false,
+      partitions: [
+        { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+      ]
+    }
+  ]
+
+  /** Standard produce response for most transactional tests. */
+  const standardProduceTopic = [
+    { name: "tx-topic", partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 1n }] }
+  ]
+
+  /**
+   * Create a full transactional producer pool.
+   */
+  function createTransactionalPool(
+    coordinatorResponses: Uint8Array[],
+    metadataTopics: Parameters<typeof buildMetadataV1Body>[1],
+    produceTopics: Parameters<typeof buildProduceResponseBody>[0],
+    produceApiVersion = 8
+  ): { pool: ConnectionPool } {
+    const coordinatorConn = createMockConnection(coordinatorResponses)
+
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildMetadataV1Body(TEST_BROKERS, metadataTopics)
+    ])
+
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildProduceResponseBody(produceTopics, produceApiVersion)
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    let getConnByIdCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnByIdCall++
+        if (getConnByIdCall === 1) {
+          return coordinatorConn
+        }
+        if (getConnByIdCall === 2) {
+          return metadataConn
+        }
+        return produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnection: vi.fn(async () => {
+        return coordinatorConn
+      }) as unknown as ConnectionPool["getConnection"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    return { pool }
+  }
+
+  // -----------------------------------------------------------------------
+  // beginTransaction
+  // -----------------------------------------------------------------------
+
+  it("throws when beginTransaction called on non-transactional producer", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({ connectionPool: pool })
+    expect(() => {
+      producer.beginTransaction()
+    }).toThrow("beginTransaction requires a transactional producer")
+  })
+
+  it("throws when beginTransaction called twice", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({ connectionPool: pool, transactionalId: "tx-1" })
+    producer.beginTransaction()
+    expect(() => {
+      producer.beginTransaction()
+    }).toThrow("transaction already in progress")
+  })
+
+  it("allows beginTransaction after commit", async () => {
+    const responses = buildCoordinatorResponses(standardMetaTopic, { endTxnErrorCode: 0 })
+    const { pool } = createTransactionalPool(responses, standardMetaTopic, standardProduceTopic)
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+    await producer.commitTransaction()
+
+    // Should be able to begin again
+    expect(() => {
+      producer.beginTransaction()
+    }).not.toThrow()
+  })
+
+  // -----------------------------------------------------------------------
+  // send requires beginTransaction for transactional producers
+  // -----------------------------------------------------------------------
+
+  it("throws when send called without beginTransaction", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    await expect(
+      producer.send("topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("transactional producer requires beginTransaction before send")
+  })
+
+  it("throws when sendToPartition called without beginTransaction", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    await expect(
+      producer.sendToPartition({ topic: "t", partition: 0 }, [
+        { key: null, value: encoder.encode("x") }
+      ])
+    ).rejects.toThrow("transactional producer requires beginTransaction before send")
+  })
+
+  // -----------------------------------------------------------------------
+  // Transactional send flow
+  // -----------------------------------------------------------------------
+
+  it("sends messages within a transaction", async () => {
+    const produceTopics = [
+      { name: "tx-topic", partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 42n }] }
+    ]
+    const responses = buildCoordinatorResponses(standardMetaTopic)
+    const { pool } = createTransactionalPool(responses, standardMetaTopic, produceTopics)
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    const results = await producer.send("tx-topic", [{ key: null, value: encoder.encode("hello") }])
+
+    expect(results).toHaveLength(1)
+    expect(results[0].baseOffset).toBe(42n)
+  })
+
+  // -----------------------------------------------------------------------
+  // commitTransaction
+  // -----------------------------------------------------------------------
+
+  it("throws when commitTransaction called on non-transactional producer", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({ connectionPool: pool })
+    await expect(producer.commitTransaction()).rejects.toThrow(
+      "commitTransaction requires a transactional producer"
+    )
+  })
+
+  it("throws when commitTransaction called without beginTransaction", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+    await expect(producer.commitTransaction()).rejects.toThrow("no transaction in progress")
+  })
+
+  it("throws when commitTransaction returns error", async () => {
+    // EndTxn returns CONCURRENT_TRANSACTIONS (51)
+    const responses = buildCoordinatorResponses(standardMetaTopic, { endTxnErrorCode: 51 })
+    const { pool } = createTransactionalPool(responses, standardMetaTopic, standardProduceTopic)
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+
+    await expect(producer.commitTransaction()).rejects.toThrow("end transaction failed")
+  })
+
+  // -----------------------------------------------------------------------
+  // abortTransaction
+  // -----------------------------------------------------------------------
+
+  it("throws when abortTransaction called on non-transactional producer", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({ connectionPool: pool })
+    await expect(producer.abortTransaction()).rejects.toThrow(
+      "abortTransaction requires a transactional producer"
+    )
+  })
+
+  it("throws when abortTransaction called without beginTransaction", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+    await expect(producer.abortTransaction()).rejects.toThrow("no transaction in progress")
+  })
+
+  it("aborts transaction and allows new one", async () => {
+    const responses = buildCoordinatorResponses(standardMetaTopic, { endTxnErrorCode: 0 })
+    const { pool } = createTransactionalPool(responses, standardMetaTopic, standardProduceTopic)
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+    await producer.abortTransaction()
+
+    // Transaction state should be reset
+    expect(() => {
+      producer.beginTransaction()
+    }).not.toThrow()
+  })
+
+  // -----------------------------------------------------------------------
+  // sendOffsetsToTransaction
+  // -----------------------------------------------------------------------
+
+  it("throws when sendOffsetsToTransaction called without transaction", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+    await expect(
+      producer.sendOffsetsToTransaction([{ topic: "t", partition: 0, offset: 10n }], "group-1")
+    ).rejects.toThrow("no transaction in progress")
+  })
+
+  it("throws when sendOffsetsToTransaction called on non-transactional producer", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({ connectionPool: pool })
+    await expect(
+      producer.sendOffsetsToTransaction([{ topic: "t", partition: 0, offset: 10n }], "group-1")
+    ).rejects.toThrow("sendOffsetsToTransaction requires a transactional producer")
+  })
+
+  // -----------------------------------------------------------------------
+  // close with active transaction
+  // -----------------------------------------------------------------------
+
+  it("aborts transaction on close", async () => {
+    const responses = buildCoordinatorResponses(standardMetaTopic, { endTxnErrorCode: 0 })
+    const { pool } = createTransactionalPool(responses, standardMetaTopic, standardProduceTopic)
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+
+    // Close should abort the in-flight transaction
+    await producer.close()
+
+    // Producer state should be cleaned up
+    expect((producer as unknown as Record<string, unknown>).producerId).toBe(-1n)
+    expect((producer as unknown as Record<string, unknown>).coordinatorHost).toBeNull()
+  })
+
+  it("clears coordinator state on close", async () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    // Non-transactional close (no active transaction)
+    await producer.close()
+
+    expect((producer as unknown as Record<string, unknown>).coordinatorHost).toBeNull()
+    expect((producer as unknown as Record<string, unknown>).coordinatorPort).toBeNull()
+  })
+
+  // -----------------------------------------------------------------------
+  // AddPartitionsToTxn error handling
+  // -----------------------------------------------------------------------
+
+  it("throws on AddPartitionsToTxn error", async () => {
+    // Discovery connection (getConnectionByNodeId call 1: FindCoordinator)
+    const discoveryConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(1, "localhost", 9092)
+    ])
+
+    // Metadata connection (getConnectionByNodeId call 2: Metadata)
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "tx-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ])
+    ])
+
+    // Coordinator connection (getConnection: InitProducerId + AddPartitionsToTxn)
+    const coordinatorConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildInitProducerIdBody(3000n, 0),
+      buildApiVersionsBody(txnApis),
+      buildAddPartitionsToTxnBody([
+        {
+          name: "tx-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 48 }] // INVALID_TXN_STATE
+        }
+      ])
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    let getConnByIdCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnByIdCall++
+        if (getConnByIdCall === 1) {
+          return discoveryConn
+        }
+        return metadataConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnection: vi.fn(async () => {
+        return coordinatorConn
+      }) as unknown as ConnectionPool["getConnection"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await expect(
+      producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("add partitions to txn failed")
+  })
+
+  // -----------------------------------------------------------------------
+  // Coordinator discovery error handling
+  // -----------------------------------------------------------------------
+
+  it("throws when FindCoordinator returns error", async () => {
+    const coordinatorConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(0, "", 0, 15) // NOT_COORDINATOR error
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        return coordinatorConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await expect(
+      producer.send("topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("find transaction coordinator failed")
+  })
+
+  it("invalidates coordinator cache on NOT_COORDINATOR error", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    // Manually set coordinator
+    const internal = producer as unknown as Record<string, unknown>
+    internal.coordinatorHost = "old-host"
+    internal.coordinatorPort = 1234
+
+    // Call invalidateCoordinatorOnError with NOT_COORDINATOR (15)
+    ;(
+      producer as unknown as { invalidateCoordinatorOnError: (code: number) => void }
+    ).invalidateCoordinatorOnError(15)
+
+    expect(internal.coordinatorHost).toBeNull()
+    expect(internal.coordinatorPort).toBeNull()
+  })
+
+  it("does not invalidate coordinator cache on non-coordinator errors", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    const internal = producer as unknown as Record<string, unknown>
+    internal.coordinatorHost = "host"
+    internal.coordinatorPort = 1234
+    ;(
+      producer as unknown as { invalidateCoordinatorOnError: (code: number) => void }
+    ).invalidateCoordinatorOnError(51) // CONCURRENT_TRANSACTIONS
+
+    expect(internal.coordinatorHost).toBe("host")
+    expect(internal.coordinatorPort).toBe(1234)
+  })
+
+  // -----------------------------------------------------------------------
+  // sendOffsetsToTransaction full flow
+  // -----------------------------------------------------------------------
+
+  it("sends offsets to transaction (full flow)", async () => {
+    /** Build an AddOffsetsToTxn v0 response body. */
+    function buildAddOffsetsToTxnBody(errorCode = 0, throttleTimeMs = 0): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(throttleTimeMs)
+      w.writeInt16(errorCode)
+      return w.finish()
+    }
+
+    /** Build a TxnOffsetCommit v0 response body. */
+    function buildTxnOffsetCommitBody(
+      topics: { name: string; partitions: { partitionIndex: number; errorCode: number }[] }[]
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt32(topics.length)
+      for (const t of topics) {
+        w.writeString(t.name)
+        w.writeInt32(t.partitions.length)
+        for (const p of t.partitions) {
+          w.writeInt32(p.partitionIndex)
+          w.writeInt16(p.errorCode)
+        }
+      }
+      return w.finish()
+    }
+
+    // Coordinator connection: FindCoordinator + InitProducerId + AddPartitionsToTxn
+    // + AddOffsetsToTxn
+    const coordinatorConn = createMockConnection([
+      // FindCoordinator
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(1, "localhost", 9092),
+      // InitProducerId
+      buildApiVersionsBody(txnApis),
+      buildInitProducerIdBody(3000n, 0),
+      // AddPartitionsToTxn
+      buildApiVersionsBody(txnApis),
+      buildAddPartitionsToTxnBody([
+        { name: "tx-topic", partitions: [{ partitionIndex: 0, errorCode: 0 }] }
+      ]),
+      // AddOffsetsToTxn
+      buildApiVersionsBody(txnApis),
+      buildAddOffsetsToTxnBody(0)
+    ])
+
+    // Group coordinator (for FindGroupCoordinator + TxnOffsetCommit)
+    const discoveryConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(2, "localhost", 9093)
+    ])
+
+    const groupCoordinatorConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildTxnOffsetCommitBody([
+        { name: "tx-topic", partitions: [{ partitionIndex: 0, errorCode: 0 }] }
+      ])
+    ])
+
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildMetadataV1Body(TEST_BROKERS, standardMetaTopic)
+    ])
+
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildProduceResponseBody(standardProduceTopic, 8)
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    let getConnByIdCall = 0
+    let getConnCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnByIdCall++
+        if (getConnByIdCall === 1) {
+          return coordinatorConn
+        } // FindCoordinator discovery
+        if (getConnByIdCall === 2) {
+          return metadataConn
+        } // Metadata (getTopicMetadata)
+        if (getConnByIdCall === 3) {
+          return produceConn
+        } // sendToLeader
+        if (getConnByIdCall === 4) {
+          return discoveryConn
+        } // FindGroupCoordinator discovery
+        return produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnection: vi.fn(async () => {
+        getConnCall++
+        if (getConnCall <= 3) {
+          return coordinatorConn
+        } // InitProducerId, AddPartitions, AddOffsets
+        return groupCoordinatorConn // TxnOffsetCommit
+      }) as unknown as ConnectionPool["getConnection"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+    await producer.sendOffsetsToTransaction(
+      [{ topic: "tx-topic", partition: 0, offset: 10n }],
+      "my-group"
+    )
+
+    // Verify the group coordinator was called (ApiVersions + TxnOffsetCommit)
+    expect(groupCoordinatorConn.send).toHaveBeenCalledTimes(2)
+  })
+
+  // -----------------------------------------------------------------------
+  // sendToPartition within a transaction
+  // -----------------------------------------------------------------------
+
+  it("sends to specific partition within a transaction", async () => {
+    const responses = buildCoordinatorResponses(standardMetaTopic)
+    const produceTopics = [
+      { name: "tx-topic", partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 99n }] }
+    ]
+    const { pool } = createTransactionalPool(responses, standardMetaTopic, produceTopics)
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    const result = await producer.sendToPartition({ topic: "tx-topic", partition: 0 }, [
+      { key: null, value: encoder.encode("direct") }
+    ])
+
+    expect(result.baseOffset).toBe(99n)
+  })
+
+  // -----------------------------------------------------------------------
+  // initProducerId via transaction coordinator
+  // -----------------------------------------------------------------------
+
+  it("routes InitProducerId through transaction coordinator", async () => {
+    const coordinatorConn = createMockConnection([
+      // FindCoordinator
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(1, "coord-host", 9095),
+      // InitProducerId (via getConnection to coordinator)
+      buildApiVersionsBody(txnApis),
+      buildInitProducerIdBody(5000n, 1),
+      // AddPartitionsToTxn
+      buildApiVersionsBody(txnApis),
+      buildAddPartitionsToTxnBody([
+        { name: "tx-topic", partitions: [{ partitionIndex: 0, errorCode: 0 }] }
+      ])
+    ])
+
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildMetadataV1Body(TEST_BROKERS, standardMetaTopic)
+    ])
+
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildProduceResponseBody(standardProduceTopic, 8)
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    let getConnByIdCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnByIdCall++
+        if (getConnByIdCall === 1) {
+          return coordinatorConn
+        }
+        if (getConnByIdCall === 2) {
+          return metadataConn
+        }
+        return produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      getConnection: vi.fn(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async () => coordinatorConn
+      ) as unknown as ConnectionPool["getConnection"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    const results = await producer.send("tx-topic", [
+      { key: null, value: encoder.encode("txn-msg") }
+    ])
+    expect(results).toHaveLength(1)
+    expect((producer as unknown as Record<string, unknown>).producerId).toBe(5000n)
+    expect((producer as unknown as Record<string, unknown>).producerEpoch).toBe(1)
+  })
+
+  // -----------------------------------------------------------------------
+  // Skips already-registered partitions in AddPartitionsToTxn
+  // -----------------------------------------------------------------------
+
+  it("skips AddPartitionsToTxn for already-registered partitions", async () => {
+    // First send: full flow including AddPartitionsToTxn
+    // Second send: should skip AddPartitionsToTxn for the same partition
+    const coordinatorConn = createMockConnection([
+      // FindCoordinator
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(1, "localhost", 9092),
+      // InitProducerId
+      buildApiVersionsBody(txnApis),
+      buildInitProducerIdBody(3000n, 0),
+      // AddPartitionsToTxn (first send)
+      buildApiVersionsBody(txnApis),
+      buildAddPartitionsToTxnBody([
+        { name: "tx-topic", partitions: [{ partitionIndex: 0, errorCode: 0 }] }
+      ])
+      // Second send should NOT call AddPartitionsToTxn again
+    ])
+
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildMetadataV1Body(TEST_BROKERS, standardMetaTopic)
+    ])
+
+    const produceConn1 = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildProduceResponseBody(standardProduceTopic, 8)
+    ])
+    const produceConn2 = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildProduceResponseBody(standardProduceTopic, 8)
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    let getConnByIdCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnByIdCall++
+        if (getConnByIdCall === 1) {
+          return coordinatorConn
+        }
+        if (getConnByIdCall === 2) {
+          return metadataConn
+        }
+        if (getConnByIdCall === 3) {
+          return produceConn1
+        }
+        return produceConn2
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      getConnection: vi.fn(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async () => coordinatorConn
+      ) as unknown as ConnectionPool["getConnection"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("first") }])
+    // Second send to same partition — should reuse cached metadata and skip AddPartitionsToTxn
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("second") }])
+
+    // coordinatorConn should still have only 6 send calls (ApiVersions+FindCoord + ApiVersions+InitPID + ApiVersions+AddPartitions)
+    expect(coordinatorConn.send).toHaveBeenCalledTimes(6)
+  })
+
+  // -----------------------------------------------------------------------
+  // negotiateApiVersion error paths (on coordinator)
+  // -----------------------------------------------------------------------
+
+  it("throws when coordinator negotiateApiVersion decode fails", async () => {
+    const coordinatorConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildFindCoordinatorBody(1, "localhost", 9092),
+      // InitProducerId: return invalid response
+      new Uint8Array([0x00]) // truncated / invalid
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      getConnectionByNodeId: vi.fn(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async () => coordinatorConn
+      ) as unknown as ConnectionPool["getConnectionByNodeId"],
+      getConnection: vi.fn(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async () => coordinatorConn
+      ) as unknown as ConnectionPool["getConnection"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await expect(
+      producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("failed to decode api versions response")
+  })
+
+  it("throws when coordinator does not support required API key", async () => {
+    const limitedApis = [
+      { apiKey: ApiKey.ApiVersions, minVersion: 0, maxVersion: 2 },
+      { apiKey: ApiKey.FindCoordinator, minVersion: 0, maxVersion: 2 },
+      { apiKey: ApiKey.InitProducerId, minVersion: 0, maxVersion: 1 }
+      // Missing AddPartitionsToTxn
+    ]
+    const coordinatorConn = createMockConnection([
+      buildApiVersionsBody(limitedApis),
+      buildFindCoordinatorBody(1, "localhost", 9092),
+      buildApiVersionsBody(limitedApis),
+      buildInitProducerIdBody(3000n, 0),
+      // Negotiate AddPartitionsToTxn — API not in version map
+      buildApiVersionsBody(limitedApis)
+    ])
+
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(txnApis),
+      buildMetadataV1Body(TEST_BROKERS, standardMetaTopic)
+    ])
+
+    const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+    let getConnByIdCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnByIdCall++
+        if (getConnByIdCall === 1) {
+          return coordinatorConn
+        }
+        return metadataConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      getConnection: vi.fn(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async () => coordinatorConn
+      ) as unknown as ConnectionPool["getConnection"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await expect(
+      producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("broker does not support api key")
+  })
+
+  // -----------------------------------------------------------------------
+  // discardBufferedMessages
+  // -----------------------------------------------------------------------
+
+  it("discardBufferedMessages rejects pending deferreds", () => {
+    const pool = createMockPool()
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1",
+      batch: { lingerMs: 10_000 }
+    })
+
+    // Directly add to accumulator for testing
+    type TestPartitionAccumulator = {
+      messages: Message[]
+      deferreds: { resolve: ReturnType<typeof vi.fn>; reject: ReturnType<typeof vi.fn> }[]
+      sizeBytes: number
+    }
+    const internal = producer as unknown as {
+      accumulator: Map<string, Map<number, TestPartitionAccumulator>>
+      discardBufferedMessages: () => void
+    }
+
+    const deferred1 = {
+      resolve: vi.fn(),
+      reject: vi.fn()
+    }
+    const deferred2 = {
+      resolve: vi.fn(),
+      reject: vi.fn()
+    }
+
+    const partMap = new Map<number, TestPartitionAccumulator>()
+    partMap.set(0, {
+      messages: [{ key: null, value: encoder.encode("a") }],
+      deferreds: [deferred1],
+      sizeBytes: 100
+    })
+    partMap.set(1, {
+      messages: [{ key: null, value: encoder.encode("b") }],
+      deferreds: [deferred2],
+      sizeBytes: 100
+    })
+    internal.accumulator.set("test-topic", partMap)
+
+    internal.discardBufferedMessages()
+
+    expect(deferred1.reject).toHaveBeenCalledTimes(1)
+    expect(deferred2.reject).toHaveBeenCalledTimes(1)
+    expect(internal.accumulator.size).toBe(0)
+  })
+
+  // -----------------------------------------------------------------------
+  // acks=0 fire-and-forget in sendToLeader
+  // -----------------------------------------------------------------------
+
+  it("returns synthetic results for acks=0", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "ack0-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [] // No produce response needed for acks=0
+    )
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      acks: Acks.None
+    })
+
+    const results = await producer.send("ack0-topic", [
+      { key: null, value: encoder.encode("fire-and-forget") }
+    ])
+
+    expect(results).toHaveLength(1)
+    expect(results[0].baseOffset).toBe(-1n)
+    expect(results[0].topicPartition.topic).toBe("ack0-topic")
+  })
+
+  // -----------------------------------------------------------------------
+  // idempotent producer requires produce API v3+
+  // -----------------------------------------------------------------------
+
+  it("throws when idempotent producer encounters produce API < v3", async () => {
+    const initPidConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(1000n, 0)
+    ])
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "v2-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ])
+    ])
+    // Produce connection only supports up to v2
+    const oldApis = [
+      { apiKey: ApiKey.ApiVersions, minVersion: 0, maxVersion: 3 },
+      { apiKey: ApiKey.Produce, minVersion: 0, maxVersion: 2 }
+    ]
+    const produceConn = createMockConnection([buildApiVersionsBody(oldApis)])
+
+    const brokerMap = new Map([[1, TEST_BROKERS[0]]])
+    let getConnCall = 0
+    const pool = createMockPool({
+      brokers: brokerMap as ConnectionPool["brokers"],
+      // eslint-disable-next-line @typescript-eslint/require-await
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCall++
+        if (getConnCall === 1) {
+          return initPidConn
+        }
+        if (getConnCall === 2) {
+          return metadataConn
+        }
+        return produceConn
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+
+    await expect(
+      producer.send("v2-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("idempotent producer requires produce api v3+")
+  })
+
+  // -----------------------------------------------------------------------
+  // initProducerId with no brokers available
+  // -----------------------------------------------------------------------
+
+  it("throws when no brokers available for InitProducerId", async () => {
+    const pool = createMockPool({
+      brokers: new Map() as ConnectionPool["brokers"]
+    })
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      idempotent: true
+    })
+
+    await expect(
+      producer.send("any-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("no brokers available")
+  })
+
+  // -----------------------------------------------------------------------
+  // Produce response error handling
+  // -----------------------------------------------------------------------
+
+  it("throws on produce partition error code", async () => {
+    const { pool } = createPoolWithBroker(
+      [
+        {
+          errorCode: 0,
+          name: "err-topic",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ],
+      [
+        {
+          name: "err-topic",
+          partitions: [{ partitionIndex: 0, errorCode: 6, baseOffset: -1n }] // NOT_LEADER_OR_FOLLOWER
+        }
+      ]
+    )
+
+    const producer = new KafkaProducer({ connectionPool: pool })
+
+    await expect(
+      producer.send("err-topic", [{ key: null, value: encoder.encode("x") }])
+    ).rejects.toThrow("produce failed")
+  })
+
+  // -----------------------------------------------------------------------
+  // EndTxn error invalidates coordinator
+  // -----------------------------------------------------------------------
+
+  it("invalidates coordinator on EndTxn NOT_COORDINATOR error", async () => {
+    const responses = buildCoordinatorResponses(standardMetaTopic, { endTxnErrorCode: 15 })
+    const { pool } = createTransactionalPool(responses, standardMetaTopic, standardProduceTopic)
+
+    const producer = new KafkaProducer({
+      connectionPool: pool,
+      transactionalId: "tx-1"
+    })
+
+    producer.beginTransaction()
+    await producer.send("tx-topic", [{ key: null, value: encoder.encode("x") }])
+
+    const internal = producer as unknown as Record<string, unknown>
+    // Coordinator should be set after FindCoordinator
+    expect(internal.coordinatorHost).not.toBeNull()
+
+    await expect(producer.commitTransaction()).rejects.toThrow("end transaction failed")
+    // After error, coordinator should be invalidated
+    expect(internal.coordinatorHost).toBeNull()
   })
 })

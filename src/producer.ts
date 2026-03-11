@@ -8,10 +8,25 @@
  * @packageDocumentation
  */
 
+import {
+  decodeAddOffsetsToTxnResponse,
+  encodeAddOffsetsToTxnRequest
+} from "./add-offsets-to-txn.js"
+import {
+  decodeAddPartitionsToTxnResponse,
+  encodeAddPartitionsToTxnRequest
+} from "./add-partitions-to-txn.js"
 import { ApiKey, negotiateVersion } from "./api-keys.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "./api-versions.js"
 import type { ConnectionPool } from "./broker-pool.js"
+import type { KafkaConnection } from "./connection.js"
+import { decodeEndTxnResponse, encodeEndTxnRequest } from "./end-txn.js"
 import { KafkaConnectionError, KafkaError, KafkaProtocolError } from "./errors.js"
+import {
+  CoordinatorType,
+  decodeFindCoordinatorResponse,
+  encodeFindCoordinatorRequest
+} from "./find-coordinator.js"
 import {
   decodeInitProducerIdResponse,
   encodeInitProducerIdRequest,
@@ -38,6 +53,7 @@ import {
   createRecord,
   encodeRecordBatch
 } from "./record-batch.js"
+import { decodeTxnOffsetCommitResponse, encodeTxnOffsetCommitRequest } from "./txn-offset-commit.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,6 +115,20 @@ export type RetryConfig = {
    * @default 2
    */
   readonly multiplier?: number
+}
+
+/**
+ * Offset with metadata for a topic-partition, used in transactional offset commits.
+ */
+export type TopicPartitionOffset = {
+  /** Topic name. */
+  readonly topic: string
+  /** Partition index. */
+  readonly partition: number
+  /** The offset to commit. */
+  readonly offset: bigint
+  /** Optional metadata for the offset. */
+  readonly metadata?: string | null
 }
 
 /**
@@ -362,6 +392,12 @@ export class KafkaProducer {
   private readonly sequenceNumbers = new Map<string, number>()
   private producerIdPromise: Promise<void> | null = null
 
+  // Transaction state
+  private inTransaction = false
+  private readonly txnPartitions = new Set<string>()
+  private coordinatorHost: string | null = null
+  private coordinatorPort: number | null = null
+
   constructor(options: ProducerOptions) {
     this.pool = options.connectionPool
     this.acks = resolveAcks(options)
@@ -394,6 +430,10 @@ export class KafkaProducer {
       throw new KafkaConnectionError("producer is closed", { retriable: false })
     }
 
+    if (this.transactionalId !== null && !this.inTransaction) {
+      throw new KafkaError("transactional producer requires beginTransaction before send", false)
+    }
+
     if (messages.length === 0) {
       return []
     }
@@ -424,12 +464,19 @@ export class KafkaProducer {
       throw new KafkaConnectionError("producer is closed", { retriable: false })
     }
 
+    if (this.transactionalId !== null && !this.inTransaction) {
+      throw new KafkaError("transactional producer requires beginTransaction before send", false)
+    }
+
     if (messages.length === 0) {
       return { topicPartition, baseOffset: -1n }
     }
 
     return this.withRetry(topicPartition.topic, async () => {
       await this.ensureProducerId()
+      if (this.inTransaction && this.transactionalId !== null) {
+        await this.addNewPartitionsToTxn(topicPartition.topic, [topicPartition.partition])
+      }
       const metadata = await this.getTopicMetadata(topicPartition.topic)
       const leaderId = metadata.partitionLeaders.get(topicPartition.partition)
       if (leaderId === undefined || leaderId < 0) {
@@ -458,7 +505,18 @@ export class KafkaProducer {
       return
     }
     try {
-      await this.flush()
+      if (this.inTransaction && this.transactionalId !== null) {
+        this.discardBufferedMessages()
+        try {
+          await this.endTransaction(false)
+        } catch {
+          // Best-effort abort on close
+        }
+        this.inTransaction = false
+        this.txnPartitions.clear()
+      } else {
+        await this.flush()
+      }
     } finally {
       this.clearLingerTimer()
       this.closed = true
@@ -466,6 +524,8 @@ export class KafkaProducer {
       this.sequenceNumbers.clear()
       this.producerId = -1n
       this.producerEpoch = -1
+      this.coordinatorHost = null
+      this.coordinatorPort = null
     }
   }
 
@@ -491,6 +551,88 @@ export class KafkaProducer {
       promises.push(this.flushTopicBatches(topic, partitions))
     }
     await Promise.all(promises)
+  }
+
+  // -------------------------------------------------------------------------
+  // Transaction API
+  // -------------------------------------------------------------------------
+
+  /**
+   * Begin a new transaction.
+   *
+   * Requires the producer to be configured with a transactional ID.
+   * Must be called before producing messages within a transaction.
+   *
+   * @throws {KafkaError} If not a transactional producer or already in a transaction.
+   */
+  beginTransaction(): void {
+    if (this.transactionalId === null) {
+      throw new KafkaError("beginTransaction requires a transactional producer", false)
+    }
+    if (this.inTransaction) {
+      throw new KafkaError("transaction already in progress", false)
+    }
+    this.inTransaction = true
+    this.txnPartitions.clear()
+  }
+
+  /**
+   * Commit the current transaction.
+   *
+   * Flushes any pending messages and sends an EndTxn(committed=true) request
+   * to the transaction coordinator.
+   *
+   * @throws {KafkaError} If not in a transaction or the commit fails.
+   */
+  async commitTransaction(): Promise<void> {
+    this.requireInTransaction("commitTransaction")
+    await this.flush()
+    await this.endTransaction(true)
+    this.inTransaction = false
+    this.txnPartitions.clear()
+  }
+
+  /**
+   * Abort the current transaction.
+   *
+   * Discards any buffered messages and sends an EndTxn(committed=false)
+   * request to the transaction coordinator.
+   *
+   * @throws {KafkaError} If not in a transaction or the abort fails.
+   */
+  async abortTransaction(): Promise<void> {
+    this.requireInTransaction("abortTransaction")
+    this.discardBufferedMessages()
+    await this.endTransaction(false)
+    this.inTransaction = false
+    this.txnPartitions.clear()
+  }
+
+  /**
+   * Send consumer offsets to the transaction.
+   *
+   * Atomically commits consumer offsets as part of the current transaction,
+   * enabling exactly-once consume-transform-produce patterns.
+   *
+   * @param offsets - The offsets to commit.
+   * @param groupId - The consumer group ID.
+   * @throws {KafkaError} If not in a transaction or the operation fails.
+   */
+  async sendOffsetsToTransaction(
+    offsets: readonly TopicPartitionOffset[],
+    groupId: string
+  ): Promise<void> {
+    this.requireInTransaction("sendOffsetsToTransaction")
+    await this.ensureProducerId()
+    // Step 1: Tell coordinator this txn includes offsets for this group
+    await this.sendAddOffsetsToTxn(groupId)
+    // Step 2: Find the group coordinator and commit offsets
+    const groupConn = await this.findGroupCoordinator(groupId)
+    try {
+      await this.sendTxnOffsetCommit(groupConn, offsets, groupId)
+    } finally {
+      this.pool.releaseConnection(groupConn)
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -526,17 +668,20 @@ export class KafkaProducer {
    * Send an InitProducerId request to the broker.
    */
   private async initProducerId(): Promise<void> {
-    const { brokers } = this.pool
-    if (brokers.size === 0) {
-      throw new KafkaConnectionError("no brokers available", { retriable: true })
+    let conn: KafkaConnection
+    if (this.transactionalId !== null) {
+      conn = await this.getCoordinatorConnection()
+    } else {
+      const { brokers } = this.pool
+      if (brokers.size === 0) {
+        throw new KafkaConnectionError("no brokers available", { retriable: true })
+      }
+      const firstBroker = brokers.values().next().value
+      if (!firstBroker) {
+        throw new KafkaConnectionError("no brokers available", { retriable: true })
+      }
+      conn = await this.pool.getConnectionByNodeId(firstBroker.nodeId)
     }
-
-    const firstBroker = brokers.values().next().value
-    if (!firstBroker) {
-      throw new KafkaConnectionError("no brokers available", { retriable: true })
-    }
-
-    const conn = await this.pool.getConnectionByNodeId(firstBroker.nodeId)
     try {
       // Negotiate InitProducerId version
       const apiVersionsReader = await conn.send(ApiKey.ApiVersions, 0, () => {
@@ -617,6 +762,415 @@ export class KafkaProducer {
   }
 
   // -------------------------------------------------------------------------
+  // Internal — Transaction support
+  // -------------------------------------------------------------------------
+
+  /**
+   * Validate that a transaction is in progress.
+   */
+  private requireInTransaction(method: string): void {
+    if (this.transactionalId === null) {
+      throw new KafkaError(`${method} requires a transactional producer`, false)
+    }
+    if (!this.inTransaction) {
+      throw new KafkaError("no transaction in progress", false)
+    }
+  }
+
+  /**
+   * Return the transactional ID, throwing if not configured.
+   */
+  private requireTransactionalId(): string {
+    if (this.transactionalId === null) {
+      throw new KafkaError("operation requires a transactional producer", false)
+    }
+    return this.transactionalId
+  }
+
+  /**
+   * Discard all buffered (unsent) messages, rejecting their promises.
+   */
+  private discardBufferedMessages(): void {
+    this.clearLingerTimer()
+    const drained = this.drainAccumulator()
+    for (const [, partitions] of drained) {
+      for (const [, batch] of partitions) {
+        for (const d of batch.deferreds) {
+          d.reject(new KafkaError("transaction aborted", false))
+        }
+      }
+    }
+  }
+
+  /**
+   * Negotiate an API version on a connection.
+   */
+  private async negotiateApiVersion(conn: KafkaConnection, apiKey: ApiKey): Promise<number> {
+    const apiVersionsReader = await conn.send(ApiKey.ApiVersions, 0, () => {
+      // v0 has an empty body
+    })
+    const apiVersionsResult = decodeApiVersionsResponse(apiVersionsReader, 0)
+    if (!apiVersionsResult.ok) {
+      throw new KafkaConnectionError(
+        `failed to decode api versions response: ${apiVersionsResult.error.message}`,
+        { broker: conn.broker }
+      )
+    }
+
+    const versionMap = apiVersionsToMap(apiVersionsResult.value)
+    const range = versionMap.get(apiKey)
+    if (!range) {
+      throw new KafkaConnectionError(`broker does not support api key ${String(apiKey)}`, {
+        broker: conn.broker,
+        retriable: false
+      })
+    }
+
+    const version = negotiateVersion(apiKey, range)
+    if (version === null) {
+      throw new KafkaConnectionError(`no compatible version for api key ${String(apiKey)}`, {
+        broker: conn.broker,
+        retriable: false
+      })
+    }
+
+    return version
+  }
+
+  /**
+   * Discover and cache the transaction coordinator for this producer's transactional ID.
+   */
+  private async findTransactionCoordinator(): Promise<void> {
+    if (this.coordinatorHost !== null) {
+      return
+    }
+
+    const { brokers } = this.pool
+    if (brokers.size === 0) {
+      throw new KafkaConnectionError("no brokers available", { retriable: true })
+    }
+    const firstBroker = brokers.values().next().value
+    if (!firstBroker) {
+      throw new KafkaConnectionError("no brokers available", { retriable: true })
+    }
+
+    const conn = await this.pool.getConnectionByNodeId(firstBroker.nodeId)
+    try {
+      const version = await this.negotiateApiVersion(conn, ApiKey.FindCoordinator)
+
+      const responseReader = await conn.send(ApiKey.FindCoordinator, version, (writer) => {
+        encodeFindCoordinatorRequest(
+          writer,
+          { key: this.requireTransactionalId(), keyType: CoordinatorType.Transaction },
+          version
+        )
+      })
+
+      const result = decodeFindCoordinatorResponse(responseReader, version)
+      if (!result.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode find coordinator response: ${result.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      if (result.value.errorCode !== 0) {
+        throw new KafkaProtocolError(
+          `find transaction coordinator failed with error code ${String(result.value.errorCode)}`,
+          result.value.errorCode,
+          isRetriableCoordinatorError(result.value.errorCode)
+        )
+      }
+
+      this.coordinatorHost = result.value.host
+      this.coordinatorPort = result.value.port
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Get a connection to the transaction coordinator.
+   */
+  private async getCoordinatorConnection(): Promise<KafkaConnection> {
+    await this.findTransactionCoordinator()
+    if (this.coordinatorHost === null || this.coordinatorPort === null) {
+      throw new KafkaConnectionError("transaction coordinator not found", { retriable: true })
+    }
+    return this.pool.getConnection(this.coordinatorHost, this.coordinatorPort)
+  }
+
+  /**
+   * Clear the cached coordinator on coordinator-related errors.
+   */
+  private invalidateCoordinatorOnError(errorCode: number): void {
+    // COORDINATOR_NOT_AVAILABLE (14) or NOT_COORDINATOR (15)
+    if (errorCode === 14 || errorCode === 15) {
+      this.coordinatorHost = null
+      this.coordinatorPort = null
+    }
+  }
+
+  /**
+   * Add new partitions to the current transaction via AddPartitionsToTxn.
+   */
+  private async addNewPartitionsToTxn(topic: string, partitions: Iterable<number>): Promise<void> {
+    const newPartitions: number[] = []
+    for (const partition of partitions) {
+      const key = `${topic}:${String(partition)}`
+      if (!this.txnPartitions.has(key)) {
+        newPartitions.push(partition)
+      }
+    }
+
+    if (newPartitions.length === 0) {
+      return
+    }
+
+    const conn = await this.getCoordinatorConnection()
+    try {
+      const version = await this.negotiateApiVersion(conn, ApiKey.AddPartitionsToTxn)
+
+      const responseReader = await conn.send(ApiKey.AddPartitionsToTxn, version, (writer) => {
+        encodeAddPartitionsToTxnRequest(
+          writer,
+          {
+            transactionalId: this.requireTransactionalId(),
+            producerId: this.producerId,
+            producerEpoch: this.producerEpoch,
+            topics: [{ name: topic, partitions: newPartitions }]
+          },
+          version
+        )
+      })
+
+      const result = decodeAddPartitionsToTxnResponse(responseReader, version)
+      if (!result.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode add partitions to txn response: ${result.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      for (const topicResult of result.value.topics) {
+        for (const partitionResult of topicResult.partitions) {
+          if (partitionResult.partitionErrorCode !== 0) {
+            this.invalidateCoordinatorOnError(partitionResult.partitionErrorCode)
+            throw new KafkaProtocolError(
+              `add partitions to txn failed for ${topic}-${String(partitionResult.partitionIndex)} with error code ${String(partitionResult.partitionErrorCode)}`,
+              partitionResult.partitionErrorCode,
+              isRetriableTransactionError(partitionResult.partitionErrorCode)
+            )
+          }
+        }
+      }
+
+      for (const partition of newPartitions) {
+        this.txnPartitions.add(`${topic}:${String(partition)}`)
+      }
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Send EndTxn (commit or abort) to the transaction coordinator.
+   */
+  private async endTransaction(committed: boolean): Promise<void> {
+    await this.ensureProducerId()
+    const conn = await this.getCoordinatorConnection()
+    try {
+      const version = await this.negotiateApiVersion(conn, ApiKey.EndTxn)
+
+      const responseReader = await conn.send(ApiKey.EndTxn, version, (writer) => {
+        encodeEndTxnRequest(
+          writer,
+          {
+            transactionalId: this.requireTransactionalId(),
+            producerId: this.producerId,
+            producerEpoch: this.producerEpoch,
+            committed
+          },
+          version
+        )
+      })
+
+      const result = decodeEndTxnResponse(responseReader, version)
+      if (!result.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode end txn response: ${result.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      if (result.value.errorCode !== 0) {
+        this.invalidateCoordinatorOnError(result.value.errorCode)
+        throw new KafkaProtocolError(
+          `end transaction failed with error code ${String(result.value.errorCode)}`,
+          result.value.errorCode,
+          isRetriableTransactionError(result.value.errorCode)
+        )
+      }
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Send AddOffsetsToTxn to the transaction coordinator.
+   */
+  private async sendAddOffsetsToTxn(groupId: string): Promise<void> {
+    const conn = await this.getCoordinatorConnection()
+    try {
+      const version = await this.negotiateApiVersion(conn, ApiKey.AddOffsetsToTxn)
+
+      const responseReader = await conn.send(ApiKey.AddOffsetsToTxn, version, (writer) => {
+        encodeAddOffsetsToTxnRequest(
+          writer,
+          {
+            transactionalId: this.requireTransactionalId(),
+            producerId: this.producerId,
+            producerEpoch: this.producerEpoch,
+            groupId
+          },
+          version
+        )
+      })
+
+      const result = decodeAddOffsetsToTxnResponse(responseReader, version)
+      if (!result.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode add offsets to txn response: ${result.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      if (result.value.errorCode !== 0) {
+        this.invalidateCoordinatorOnError(result.value.errorCode)
+        throw new KafkaProtocolError(
+          `add offsets to txn failed with error code ${String(result.value.errorCode)}`,
+          result.value.errorCode,
+          isRetriableTransactionError(result.value.errorCode)
+        )
+      }
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Find a consumer group coordinator and return a connection to it.
+   */
+  private async findGroupCoordinator(groupId: string): Promise<KafkaConnection> {
+    const { brokers } = this.pool
+    if (brokers.size === 0) {
+      throw new KafkaConnectionError("no brokers available", { retriable: true })
+    }
+    const firstBroker = brokers.values().next().value
+    if (!firstBroker) {
+      throw new KafkaConnectionError("no brokers available", { retriable: true })
+    }
+
+    const conn = await this.pool.getConnectionByNodeId(firstBroker.nodeId)
+    try {
+      const version = await this.negotiateApiVersion(conn, ApiKey.FindCoordinator)
+
+      const responseReader = await conn.send(ApiKey.FindCoordinator, version, (writer) => {
+        encodeFindCoordinatorRequest(
+          writer,
+          { key: groupId, keyType: CoordinatorType.Group },
+          version
+        )
+      })
+
+      const result = decodeFindCoordinatorResponse(responseReader, version)
+      if (!result.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode find coordinator response: ${result.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      if (result.value.errorCode !== 0) {
+        throw new KafkaProtocolError(
+          `find group coordinator failed with error code ${String(result.value.errorCode)}`,
+          result.value.errorCode,
+          isRetriableCoordinatorError(result.value.errorCode)
+        )
+      }
+
+      return await this.pool.getConnection(result.value.host, result.value.port)
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Send TxnOffsetCommit to a group coordinator.
+   */
+  private async sendTxnOffsetCommit(
+    conn: KafkaConnection,
+    offsets: readonly TopicPartitionOffset[],
+    groupId: string
+  ): Promise<void> {
+    const version = await this.negotiateApiVersion(conn, ApiKey.TxnOffsetCommit)
+
+    // Group offsets by topic
+    const byTopic = new Map<
+      string,
+      { partitionIndex: number; committedOffset: bigint; committedMetadata: string | null }[]
+    >()
+    for (const offset of offsets) {
+      let parts = byTopic.get(offset.topic)
+      if (!parts) {
+        parts = []
+        byTopic.set(offset.topic, parts)
+      }
+      parts.push({
+        partitionIndex: offset.partition,
+        committedOffset: offset.offset,
+        committedMetadata: offset.metadata ?? null
+      })
+    }
+
+    const topics = [...byTopic.entries()].map(([name, partitions]) => ({ name, partitions }))
+
+    const responseReader = await conn.send(ApiKey.TxnOffsetCommit, version, (writer) => {
+      encodeTxnOffsetCommitRequest(
+        writer,
+        {
+          transactionalId: this.requireTransactionalId(),
+          groupId,
+          producerId: this.producerId,
+          producerEpoch: this.producerEpoch,
+          topics
+        },
+        version
+      )
+    })
+
+    const result = decodeTxnOffsetCommitResponse(responseReader, version)
+    if (!result.ok) {
+      throw new KafkaConnectionError(
+        `failed to decode txn offset commit response: ${result.error.message}`,
+        { broker: conn.broker }
+      )
+    }
+
+    for (const topicResult of result.value.topics) {
+      for (const partitionResult of topicResult.partitions) {
+        if (partitionResult.errorCode !== 0) {
+          throw new KafkaProtocolError(
+            `txn offset commit failed for ${topicResult.name}-${String(partitionResult.partitionIndex)} with error code ${String(partitionResult.errorCode)}`,
+            partitionResult.errorCode,
+            isRetriableTransactionError(partitionResult.errorCode)
+          )
+        }
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
 
@@ -639,6 +1193,11 @@ export class KafkaProducer {
         byPartition.set(partition, group)
       }
       group.push(message)
+    }
+
+    // For transactional producers, register new partitions with the coordinator
+    if (this.inTransaction && this.transactionalId !== null) {
+      await this.addNewPartitionsToTxn(topic, byPartition.keys())
     }
 
     const byLeader = new Map<number, Map<number, Message[]>>()
@@ -786,6 +1345,9 @@ export class KafkaProducer {
   ): Promise<void> {
     try {
       const results = await this.withRetry(topic, async () => {
+        if (this.inTransaction && this.transactionalId !== null) {
+          await this.addNewPartitionsToTxn(topic, partitions.keys())
+        }
         const metadata = await this.getTopicMetadata(topic)
 
         const byLeader = new Map<number, Map<number, Message[]>>()
@@ -1172,6 +1734,33 @@ function isRetriableMetadataError(errorCode: number): boolean {
   switch (errorCode) {
     case 5: // LEADER_NOT_AVAILABLE
     case 6: // NOT_LEADER_OR_FOLLOWER
+      return true
+    default:
+      return false
+  }
+}
+
+/**
+ * Retriable Kafka error codes for transaction operations.
+ */
+function isRetriableTransactionError(errorCode: number): boolean {
+  switch (errorCode) {
+    case 14: // COORDINATOR_NOT_AVAILABLE
+    case 15: // NOT_COORDINATOR
+    case 51: // CONCURRENT_TRANSACTIONS
+      return true
+    default:
+      return false
+  }
+}
+
+/**
+ * Retriable Kafka error codes for FindCoordinator.
+ */
+function isRetriableCoordinatorError(errorCode: number): boolean {
+  switch (errorCode) {
+    case 14: // COORDINATOR_NOT_AVAILABLE
+    case 15: // NOT_COORDINATOR
       return true
     default:
       return false

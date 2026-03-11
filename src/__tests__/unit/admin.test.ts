@@ -537,6 +537,204 @@ describe("KafkaAdmin", () => {
   })
 
   // -------------------------------------------------------------------------
+  // Decode error paths — each admin op with truncated response
+  // -------------------------------------------------------------------------
+
+  describe("decode error paths", () => {
+    it("throws on createTopics decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(
+        admin.createTopics({
+          topics: [{ name: "x", numPartitions: 1, replicationFactor: 1 }],
+          timeoutMs: 1000
+        })
+      ).rejects.toThrow("failed to decode create topics response")
+    })
+
+    it("throws on deleteTopics decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.deleteTopics({ topicNames: ["x"], timeoutMs: 1000 })).rejects.toThrow(
+        "failed to decode delete topics response"
+      )
+    })
+
+    it("throws on createPartitions decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(
+        admin.createPartitions({
+          topics: [{ name: "x", count: 3, assignments: null }],
+          timeoutMs: 1000
+        })
+      ).rejects.toThrow("failed to decode create partitions response")
+    })
+
+    it("throws on describeConfigs decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(
+        admin.describeConfigs({
+          resources: [
+            { resourceType: ConfigResourceType.Topic, resourceName: "x", configNames: null }
+          ]
+        })
+      ).rejects.toThrow("failed to decode describe configs response")
+    })
+
+    it("throws on alterConfigs decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(
+        admin.alterConfigs({
+          resources: [
+            {
+              resourceType: ConfigResourceType.Topic,
+              resourceName: "x",
+              configs: [{ name: "a", value: "b" }]
+            }
+          ]
+        })
+      ).rejects.toThrow("failed to decode alter configs response")
+    })
+
+    it("throws on listTopics (metadata) decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.listTopics()).rejects.toThrow("failed to decode metadata response")
+    })
+
+    it("throws on describeTopics (metadata) decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.describeTopics(["x"])).rejects.toThrow(
+        "failed to decode metadata response"
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // negotiateApiVersion error paths
+  // -------------------------------------------------------------------------
+
+  describe("negotiateApiVersion errors", () => {
+    it("throws on ApiVersions decode failure", async () => {
+      const conn = createMockConnection([
+        new Uint8Array([0x00]) // truncated ApiVersions response
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.listTopics()).rejects.toThrow("failed to decode api versions response")
+    })
+
+    it("throws on ApiVersions non-zero error code", async () => {
+      const w = new BinaryWriter()
+      w.writeInt16(35) // UNSUPPORTED_VERSION error code
+      w.writeInt32(0) // empty api keys array
+      const errorBody = w.finish()
+
+      const conn = createMockConnection([errorBody])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.listTopics()).rejects.toThrow(
+        "api versions request failed with error code"
+      )
+    })
+
+    it("throws when broker does not support required API key", async () => {
+      // Only advertise ApiVersions, not Metadata
+      const limitedApis = [{ apiKey: ApiKey.ApiVersions, minVersion: 0, maxVersion: 3 }]
+      const conn = createMockConnection([buildApiVersionsBody(limitedApis)])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.listTopics()).rejects.toThrow("broker does not support api key")
+    })
+
+    it("throws when no compatible version exists for API key", async () => {
+      // Advertise Metadata with version range that does not overlap our supported range
+      const incompatibleApis = [
+        { apiKey: ApiKey.ApiVersions, minVersion: 0, maxVersion: 3 },
+        { apiKey: ApiKey.Metadata, minVersion: 99, maxVersion: 100 }
+      ]
+      const conn = createMockConnection([buildApiVersionsBody(incompatibleApis)])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.listTopics()).rejects.toThrow("no compatible api version")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // No brokers available - separate controller and any-broker paths
+  // -------------------------------------------------------------------------
+
+  describe("no brokers available", () => {
+    it("throws when pool has no brokers (controller path)", async () => {
+      const pool = createMockPool()
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(
+        admin.createTopics({
+          topics: [{ name: "x", numPartitions: 1, replicationFactor: 1 }],
+          timeoutMs: 1000
+        })
+      ).rejects.toThrow("no brokers available")
+    })
+
+    it("throws when pool has no brokers (any-broker path)", async () => {
+      const pool = createMockPool()
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(
+        admin.describeConfigs({
+          resources: [
+            { resourceType: ConfigResourceType.Topic, resourceName: "x", configNames: null }
+          ]
+        })
+      ).rejects.toThrow("no brokers available")
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // releaseConnection is always called
   // -------------------------------------------------------------------------
 

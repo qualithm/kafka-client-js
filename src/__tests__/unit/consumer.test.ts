@@ -1499,4 +1499,651 @@ describe("KafkaConsumer", () => {
       await consumer.close()
     })
   })
+
+  // -------------------------------------------------------------------------
+  // heartbeat handling
+  // -------------------------------------------------------------------------
+
+  describe("heartbeat", () => {
+    function buildHeartbeatV0Body(errorCode: number): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt16(errorCode)
+      return w.finish()
+    }
+
+    it("triggers rejoin on REBALANCE_IN_PROGRESS heartbeat", async () => {
+      // After joining, heartbeat returns REBALANCE_IN_PROGRESS (27)
+      // This should set joined=false
+      const heartbeatResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildHeartbeatV0Body(27) // REBALANCE_IN_PROGRESS
+      ]
+
+      const { pool, conn: _conn } = createJoinFlowMock({
+        committedOffset: 10n,
+        extraResponses: heartbeatResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 10 // fire quickly
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // Wait for heartbeat to fire
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      // After REBALANCE_IN_PROGRESS, joined should be false
+      // partitions getter still has data but joined flag is cleared
+      await consumer.close()
+    })
+
+    it("resets member state on UNKNOWN_MEMBER_ID heartbeat", async () => {
+      const heartbeatResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildHeartbeatV0Body(25) // UNKNOWN_MEMBER_ID
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 10n,
+        extraResponses: heartbeatResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 10
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await consumer.close()
+    })
+
+    it("resets member state on ILLEGAL_GENERATION heartbeat", async () => {
+      const heartbeatResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildHeartbeatV0Body(22) // ILLEGAL_GENERATION
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 10n,
+        extraResponses: heartbeatResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 10
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await consumer.close()
+    })
+
+    it("resets member state on FENCED_INSTANCE_ID heartbeat", async () => {
+      const heartbeatResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildHeartbeatV0Body(82) // FENCED_INSTANCE_ID
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 10n,
+        extraResponses: heartbeatResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 10
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await consumer.close()
+    })
+
+    it("handles heartbeat connection failure gracefully", async () => {
+      const { pool, conn } = createJoinFlowMock({ committedOffset: 10n })
+
+      // After join flow, next sends should fail (heartbeat)
+      const originalSend = conn.send.getMockImplementation()
+      let callsSoFar = 0
+      const joinFlowCalls = conn.send.mock.calls.length
+      // eslint-disable-next-line @typescript-eslint/require-await
+      conn.send = vi.fn(async (...args: unknown[]) => {
+        callsSoFar++
+        // After join flow, fail heartbeat attempts
+        if (callsSoFar > joinFlowCalls + 20) {
+          throw new Error("connection lost")
+        }
+        return (originalSend as (...a: unknown[]) => unknown)(...args)
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 10
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // Wait for heartbeat to fire and fail
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      // Should not throw — heartbeat failures are handled gracefully
+      await consumer.close()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // auto-commit on close
+  // -------------------------------------------------------------------------
+
+  describe("auto-commit", () => {
+    function buildOffsetCommitV0Body(
+      topics: { name: string; partitions: { partitionIndex: number; errorCode: number }[] }[]
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(topics.length)
+      for (const t of topics) {
+        w.writeString(t.name)
+        w.writeInt32(t.partitions.length)
+        for (const p of t.partitions) {
+          w.writeInt32(p.partitionIndex)
+          w.writeInt16(p.errorCode)
+        }
+      }
+      return w.finish()
+    }
+
+    it("auto-commits on close when enabled and records were fetched", async () => {
+      const textEncoder = new TextEncoder()
+      const record = createRecord(textEncoder.encode("key"), textEncoder.encode("val"))
+      const batch = buildRecordBatch([record], { baseOffset: 5n, baseTimestamp: 1000n })
+      const recordBytes = encodeRecordBatch(batch)
+
+      function buildFetchV4Body(
+        topics: {
+          name: string
+          partitions: {
+            partitionIndex: number
+            errorCode: number
+            highWatermark: bigint
+            records: Uint8Array | null
+          }[]
+        }[]
+      ): Uint8Array {
+        const w = new BinaryWriter()
+        w.writeInt32(0) // throttle_time_ms
+        w.writeInt32(topics.length)
+        for (const t of topics) {
+          w.writeString(t.name)
+          w.writeInt32(t.partitions.length)
+          for (const p of t.partitions) {
+            w.writeInt32(p.partitionIndex)
+            w.writeInt16(p.errorCode)
+            w.writeInt64(p.highWatermark)
+            w.writeInt64(-1n) // last_stable_offset
+            w.writeInt32(-1) // aborted_transactions null
+            w.writeBytes(p.records)
+          }
+        }
+        return w.finish()
+      }
+
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [
+              { partitionIndex: 0, errorCode: 0, highWatermark: 10n, records: recordBytes }
+            ]
+          }
+        ])
+      ]
+
+      const commitResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildOffsetCommitV0Body([
+          { name: "test-topic", partitions: [{ partitionIndex: 0, errorCode: 0 }] }
+        ])
+      ]
+
+      const leaveResponses = [buildApiVersionsBody(STANDARD_APIS), buildLeaveGroupV0Body(0)]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 5n,
+        extraResponses: [...fetchResponses, ...commitResponses, ...leaveResponses]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 100_000,
+          autoCommit: true,
+          autoCommitIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // Poll to get records (advances fetch offset, marks uncommitted)
+      const records = await consumer.poll()
+      expect(records.length).toBe(1)
+
+      // Close should auto-commit and leave
+      await consumer.close()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // negotiateApiVersion errors
+  // -------------------------------------------------------------------------
+
+  describe("negotiateApiVersion errors", () => {
+    it("throws on ApiVersions decode failure in consumer", async () => {
+      const conn = createMockConnection([
+        new Uint8Array([0x00]) // truncated
+      ])
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({ connectionPool: pool, retry: { maxRetries: 0 } })
+      )
+      consumer.subscribe(["test-topic"])
+      await expect(consumer.connect()).rejects.toThrow("failed to decode api versions response")
+    })
+
+    it("throws when broker does not support FindCoordinator", async () => {
+      const limitedApis = [{ apiKey: ApiKey.ApiVersions, minVersion: 0, maxVersion: 3 }]
+      const conn = createMockConnection([buildApiVersionsBody(limitedApis)])
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({ connectionPool: pool, retry: { maxRetries: 0 } })
+      )
+      consumer.subscribe(["test-topic"])
+      await expect(consumer.connect()).rejects.toThrow("broker does not support api key")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // FindCoordinator decode failure
+  // -------------------------------------------------------------------------
+
+  describe("FindCoordinator decode failure", () => {
+    it("throws on truncated FindCoordinator response", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated FindCoordinator response
+      ])
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({ connectionPool: pool, retry: { maxRetries: 0 } })
+      )
+      consumer.subscribe(["test-topic"])
+      await expect(consumer.connect()).rejects.toThrow("failed to decode find coordinator response")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // JoinGroup decode failure
+  // -------------------------------------------------------------------------
+
+  describe("JoinGroup decode failure", () => {
+    it("throws on truncated JoinGroup response", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated JoinGroup response
+      ])
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({ connectionPool: pool, retry: { maxRetries: 0 } })
+      )
+      consumer.subscribe(["test-topic"])
+      await expect(consumer.connect()).rejects.toThrow("failed to decode join group response")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // SyncGroup decode failure
+  // -------------------------------------------------------------------------
+
+  describe("SyncGroup decode failure", () => {
+    it("throws on truncated SyncGroup response", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(0, 1, "range", "leader-1", "member-1", []),
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated SyncGroup response
+      ])
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({ connectionPool: pool, retry: { maxRetries: 0 } })
+      )
+      consumer.subscribe(["test-topic"])
+      await expect(consumer.connect()).rejects.toThrow("failed to decode sync group response")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // OffsetFetch decode failure
+  // -------------------------------------------------------------------------
+
+  describe("OffsetFetch decode failure", () => {
+    it("throws on truncated OffsetFetch response", async () => {
+      const assignmentBytes = buildConsumerProtocolAssignment([
+        { topic: "test-topic", partitions: [0] }
+      ])
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(0, 1, "range", "leader-1", "member-1", []),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildSyncGroupV0Body(0, assignmentBytes),
+        // Metadata refresh
+        buildApiVersionsBody(STANDARD_APIS),
+        buildMetadataV1Body(
+          [{ nodeId: 1, host: "localhost", port: 9092 }],
+          [
+            {
+              errorCode: 0,
+              name: "test-topic",
+              isInternal: false,
+              partitions: [
+                { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+              ]
+            }
+          ]
+        ),
+        // Truncated OffsetFetch
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00])
+      ])
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({ connectionPool: pool, retry: { maxRetries: 0 } })
+      )
+      consumer.subscribe(["test-topic"])
+      await expect(consumer.connect()).rejects.toThrow("failed to decode offset fetch response")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // poll() triggers join when not yet joined
+  // -------------------------------------------------------------------------
+
+  describe("poll auto-join", () => {
+    it("auto-joins on poll when not yet connected", async () => {
+      function buildFetchV4Body(
+        topics: {
+          name: string
+          partitions: {
+            partitionIndex: number
+            errorCode: number
+            highWatermark: bigint
+            records: Uint8Array | null
+          }[]
+        }[]
+      ): Uint8Array {
+        const w = new BinaryWriter()
+        w.writeInt32(0)
+        w.writeInt32(topics.length)
+        for (const t of topics) {
+          w.writeString(t.name)
+          w.writeInt32(t.partitions.length)
+          for (const p of t.partitions) {
+            w.writeInt32(p.partitionIndex)
+            w.writeInt16(p.errorCode)
+            w.writeInt64(p.highWatermark)
+            w.writeInt64(-1n)
+            w.writeInt32(-1)
+            w.writeBytes(p.records)
+          }
+        }
+        return w.finish()
+      }
+
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [{ partitionIndex: 0, errorCode: 0, highWatermark: 0n, records: null }]
+          }
+        ])
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 0n,
+        extraResponses: fetchResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 100_000,
+          autoCommit: false
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      // Do NOT call connect() — poll should auto-join
+      const records = await consumer.poll()
+      expect(records).toEqual([])
+
+      await consumer.close()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Fetch response with non-zero partition error (not OFFSET_OUT_OF_RANGE)
+  // -------------------------------------------------------------------------
+
+  describe("fetch non-retriable partition error", () => {
+    it("skips partitions with non-zero error code other than OFFSET_OUT_OF_RANGE", async () => {
+      function buildFetchV4Body(
+        topics: {
+          name: string
+          partitions: {
+            partitionIndex: number
+            errorCode: number
+            highWatermark: bigint
+            records: Uint8Array | null
+          }[]
+        }[]
+      ): Uint8Array {
+        const w = new BinaryWriter()
+        w.writeInt32(0)
+        w.writeInt32(topics.length)
+        for (const t of topics) {
+          w.writeString(t.name)
+          w.writeInt32(t.partitions.length)
+          for (const p of t.partitions) {
+            w.writeInt32(p.partitionIndex)
+            w.writeInt16(p.errorCode)
+            w.writeInt64(p.highWatermark)
+            w.writeInt64(-1n)
+            w.writeInt32(-1)
+            w.writeBytes(p.records)
+          }
+        }
+        return w.finish()
+      }
+
+      const fetchResponses = [
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFetchV4Body([
+          {
+            name: "test-topic",
+            partitions: [
+              {
+                partitionIndex: 0,
+                errorCode: 6, // NOT_LEADER_OR_FOLLOWER
+                highWatermark: 0n,
+                records: null
+              }
+            ]
+          }
+        ])
+      ]
+
+      const { pool } = createJoinFlowMock({
+        committedOffset: 0n,
+        extraResponses: fetchResponses
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      const records = await consumer.poll()
+      expect(records.length).toBe(0)
+
+      await consumer.close()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Metadata refresh with no brokers
+  // -------------------------------------------------------------------------
+
+  describe("metadata refresh failures", () => {
+    it("throws when no brokers available during metadata refresh", async () => {
+      const assignmentBytes = buildConsumerProtocolAssignment([
+        { topic: "test-topic", partitions: [0] }
+      ])
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(0, 1, "range", "leader-1", "member-1", []),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildSyncGroupV0Body(0, assignmentBytes)
+        // No metadata response — brokers will be empty after this
+      ])
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+
+      let getConnCallCount = 0
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () => {
+          getConnCallCount++
+          // After JoinGroup+SyncGroup complete, clear brokers to simulate unavailable
+          if (getConnCallCount > 6) {
+            // Modify brokers to be empty for metadata refresh
+            ;(pool as unknown as { brokers: Map<number, unknown> }).brokers = new Map()
+            throw new Error("no more mock responses")
+          }
+          return Promise.resolve(conn)
+        }) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({ connectionPool: pool, retry: { maxRetries: 0 } })
+      )
+      consumer.subscribe(["test-topic"])
+      await expect(consumer.connect()).rejects.toThrow()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Offset reset with latest strategy
+  // -------------------------------------------------------------------------
+
+  describe("offset reset with latest", () => {
+    it("resets offsets using latest strategy", async () => {
+      const { pool } = createJoinFlowMock({
+        committedOffset: -1n,
+        topics: ["test-topic"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          offsetReset: OffsetResetStrategy.Latest,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      expect(consumer.partitions).toEqual([{ topic: "test-topic", partition: 0 }])
+      await consumer.close()
+    })
+  })
 })

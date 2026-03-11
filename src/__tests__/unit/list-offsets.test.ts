@@ -641,6 +641,133 @@ describe("decodeListOffsetsResponse", () => {
       expect(result.ok).toBe(false)
     })
 
+    it("returns failure on truncated topic name (non-flexible)", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeInt32(1) // topics array length = 1
+      // topic name is too short (only 2 bytes of length prefix, no string data)
+      const buf = writer.finish()
+      // Append partial topic name length
+      const truncated = new Uint8Array(buf.length + 2)
+      truncated.set(buf)
+      truncated.set([0, 5], buf.length) // says string length=5 but no data
+      const reader = new BinaryReader(truncated)
+      const result = decodeListOffsetsResponse(reader, 2)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated topic name (flexible)", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeUnsignedVarInt(2) // topics array = 1 topic
+      // compact string says length=10 but no data follows
+      writer.writeUnsignedVarInt(11) // compact string length (10 + 1)
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 6)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated partition data (non-flexible)", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms (v2+)
+      writer.writeInt32(1) // 1 topic
+      writer.writeString("test-topic")
+      writer.writeInt32(1) // 1 partition
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      // v2 needs timestamp (INT64) + offset (INT64) but we stop here
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 2)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated partitions array (flexible)", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeUnsignedVarInt(2) // 1 topic
+      writer.writeCompactString("test-topic")
+      // partitions array compact length says 10 but only partial data
+      writer.writeUnsignedVarInt(2) // 1 partition
+      // partition_index only, truncated
+      writer.writeInt32(0)
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 6)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v1+ timestamp/offset", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // 1 topic
+      writer.writeString("test-topic")
+      writer.writeInt32(1) // 1 partition
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      // Missing timestamp and offset
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 1)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v4+ leader_epoch", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeInt32(1)
+      writer.writeString("test-topic")
+      writer.writeInt32(1)
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      writer.writeInt64(1000n) // timestamp
+      writer.writeInt64(500n) // offset
+      // Missing leader_epoch
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 4)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v6+ tagged fields", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeUnsignedVarInt(2) // 1 topic
+      writer.writeCompactString("test-topic")
+      writer.writeUnsignedVarInt(2) // 1 partition
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      writer.writeInt64(1000n) // timestamp
+      writer.writeInt64(500n) // offset
+      writer.writeInt32(1) // leader_epoch
+      writer.writeUnsignedVarInt(0) // partition tagged fields
+      writer.writeUnsignedVarInt(0) // topic tagged fields
+      // Missing response tagged fields
+      const buf = writer.finish()
+      // Truncate the last byte
+      const truncated = buf.slice(0, buf.length - 1)
+      const reader = new BinaryReader(truncated)
+      const result = decodeListOffsetsResponse(reader, 6)
+      // If we truncate 1 byte, the last tagged fields read will fail
+      // (one of the tagged fields will be missing)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v0 old_style_offsets", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // 1 topic
+      writer.writeString("test-topic")
+      writer.writeInt32(1) // 1 partition
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      writer.writeInt32(1) // old_style_offsets length = 1
+      // Missing the offset INT64
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
     it("correctly reports bytesRead", () => {
       const writer = new BinaryWriter()
 
@@ -659,6 +786,59 @@ describe("decodeListOffsetsResponse", () => {
       if (result.ok) {
         expect(result.bytesRead).toBe(buf.length)
       }
+    })
+  })
+
+  describe("v0 — multiple old_style_offsets", () => {
+    it("decodes response with multiple offsets (takes first, skips rest)", () => {
+      const writer = new BinaryWriter()
+
+      // topics array length
+      writer.writeInt32(1)
+      // topic name
+      writer.writeString("test-topic")
+      // partitions array length
+      writer.writeInt32(1)
+      // partition_index
+      writer.writeInt32(0)
+      // error_code
+      writer.writeInt16(0)
+      // old_style_offsets array length = 3
+      writer.writeInt32(3)
+      // first offset (used)
+      writer.writeInt64(100n)
+      // second offset (skipped)
+      writer.writeInt64(200n)
+      // third offset (skipped)
+      writer.writeInt64(300n)
+
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 0)
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.topics[0].partitions[0].offset).toBe(100n)
+      }
+    })
+
+    it("returns failure when skip offset read fails in v0", () => {
+      const writer = new BinaryWriter()
+
+      writer.writeInt32(1) // topics
+      writer.writeString("test-topic")
+      writer.writeInt32(1) // partitions
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      writer.writeInt32(3) // old_style_offsets length (3 offsets)
+      writer.writeInt64(100n) // first offset OK
+      writer.writeInt64(200n) // second offset OK
+      // third offset missing — truncated
+
+      const buf = writer.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListOffsetsResponse(reader, 0)
+      expect(result.ok).toBe(false)
     })
   })
 })

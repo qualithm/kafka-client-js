@@ -43,7 +43,7 @@ export const ApiKey = {
   AddPartitionsToTxn: 24,
   AddOffsetsToTxn: 25,
   EndTxn: 26,
-  TxnOffsetCommit: 27,
+  TxnOffsetCommit: 28,
   DescribeAcls: 29,
   CreateAcls: 30,
   DeleteAcls: 31,

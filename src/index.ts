@@ -223,7 +223,13 @@ export type {
 export { createKafka, Kafka } from "./kafka.js"
 
 // Producer
-export type { BatchConfig, Partitioner, ProducerOptions, RetryConfig } from "./producer.js"
+export type {
+  BatchConfig,
+  Partitioner,
+  ProducerOptions,
+  RetryConfig,
+  TopicPartitionOffset
+} from "./producer.js"
 export {
   createProducer,
   defaultPartitioner,
