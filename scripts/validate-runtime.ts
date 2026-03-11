@@ -170,7 +170,7 @@ try {
   writer.writeInt32(42);
   writer.writeInt16(7);
   writer.writeString("hello");
-  const bytes = writer.toUint8Array();
+  const bytes = writer.finish();
 
   const reader = new BinaryReader(bytes);
   const i32 = reader.readInt32();
@@ -222,8 +222,8 @@ try {
 
 // Test serialization round-trip
 try {
-  const encoded = stringSerializer.serialize("test-topic", "hello kafka");
-  const decoded = stringSerializer.deserialize("test-topic", encoded);
+  const encoded = stringSerializer.serialize("hello kafka", "test-topic");
+  const decoded = stringSerializer.deserialize(encoded, "test-topic");
   if (decoded === "hello kafka") {
     passed++;
   } else {
