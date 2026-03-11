@@ -450,7 +450,7 @@ export class KafkaConsumer {
    * Also handles rebalance signals from heartbeat responses and triggers
    * rejoin when necessary.
    *
-   * @param timeoutMs - Maximum time to wait for records.
+   * @param _timeoutMs - Maximum time to wait for records (reserved for future use).
    * @returns Consumer records from the assigned partitions.
    */
   async poll(_timeoutMs?: number): Promise<readonly ConsumerRecord[]> {

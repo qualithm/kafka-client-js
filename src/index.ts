@@ -338,7 +338,7 @@ export {
 } from "./sasl-authenticate.js"
 
 // SASL mechanisms
-export type { SaslAuthenticator } from "./sasl.js"
+export type { SaslAuthenticator, ScramAlgorithm } from "./sasl.js"
 export {
   createPlainAuthenticator,
   createSaslAuthenticator,

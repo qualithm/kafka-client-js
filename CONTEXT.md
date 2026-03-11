@@ -339,7 +339,7 @@ links point to correct repository.
 
 - [x] Expand README with feature overview, API usage examples, and architecture summary
 - [x] Add produce/consume end-to-end example in `examples/`
-- [ ] Generate TypeDoc and verify output
+- [x] Generate TypeDoc and verify output
 
 Acceptance: README has quick-start code snippets for producer, consumer, and admin. Examples are
 runnable.

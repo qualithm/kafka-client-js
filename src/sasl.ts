@@ -89,9 +89,8 @@ const TEXT_DECODER = new TextDecoder()
 
 /**
  * Hash algorithm descriptor for SCRAM variants.
- * @internal
  */
-type ScramAlgorithm = {
+export type ScramAlgorithm = {
   readonly name: "SHA-256" | "SHA-512"
   readonly hashName: "SHA-256" | "SHA-512"
   readonly hashLength: number
