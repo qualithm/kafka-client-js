@@ -37,6 +37,12 @@ import {
   encodeDeleteGroupsRequest
 } from "../protocol/delete-groups.js"
 import {
+  decodeDeleteRecordsResponse,
+  type DeleteRecordsRequest,
+  type DeleteRecordsTopicResponse,
+  encodeDeleteRecordsRequest
+} from "../protocol/delete-records.js"
+import {
   decodeDeleteTopicsResponse,
   type DeleteTopicsRequest,
   type DeleteTopicsTopicResponse,
@@ -208,6 +214,42 @@ export class KafkaAdmin {
         if (!result.ok) {
           throw new KafkaConnectionError(
             `failed to decode delete topics response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.topics
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Delete records from topic partitions up to specified offsets.
+   *
+   * Records before the specified offset in each partition are deleted
+   * (the log start offset is advanced). Use offset -1 to delete up to
+   * the high watermark.
+   *
+   * @param request - The DeleteRecords request payload.
+   * @returns Per-topic/partition deletion results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async deleteRecords(
+    request: DeleteRecordsRequest
+  ): Promise<readonly DeleteRecordsTopicResponse[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DeleteRecords)
+      try {
+        const responseReader = await conn.send(ApiKey.DeleteRecords, apiVersion, (writer) => {
+          encodeDeleteRecordsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDeleteRecordsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode delete records response: ${result.error.message}`,
             { broker: conn.broker }
           )
         }

@@ -567,3 +567,33 @@ export {
   decodeDeleteGroupsResponse,
   encodeDeleteGroupsRequest
 } from "./protocol/delete-groups.js"
+
+// DeleteRecords API
+export type {
+  DeleteRecordsPartitionRequest,
+  DeleteRecordsPartitionResponse,
+  DeleteRecordsRequest,
+  DeleteRecordsResponse,
+  DeleteRecordsTopicRequest,
+  DeleteRecordsTopicResponse
+} from "./protocol/delete-records.js"
+export {
+  buildDeleteRecordsRequest,
+  decodeDeleteRecordsResponse,
+  encodeDeleteRecordsRequest
+} from "./protocol/delete-records.js"
+
+// OffsetForLeaderEpoch API
+export type {
+  OffsetForLeaderEpochPartitionRequest,
+  OffsetForLeaderEpochPartitionResponse,
+  OffsetForLeaderEpochRequest,
+  OffsetForLeaderEpochResponse,
+  OffsetForLeaderEpochTopicRequest,
+  OffsetForLeaderEpochTopicResponse
+} from "./protocol/offset-for-leader-epoch.js"
+export {
+  buildOffsetForLeaderEpochRequest,
+  decodeOffsetForLeaderEpochResponse,
+  encodeOffsetForLeaderEpochRequest
+} from "./protocol/offset-for-leader-epoch.js"
