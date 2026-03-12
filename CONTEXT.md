@@ -393,7 +393,7 @@ default per Locked Decision #9.
 ### Integration Tests
 
 - [x] End-to-end produce/consume test against KRaft broker (docker-compose)
-- [ ] SASL/PLAIN and SASL/SCRAM authentication integration tests
+- [x] SASL/PLAIN and SASL/SCRAM authentication integration tests
 - [x] Consumer group rebalance integration test (multiple consumers)
 - [x] Transactional produce with commit/abort integration test
 - [x] Admin client operations integration test (create/delete topics, describe/alter configs)

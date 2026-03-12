@@ -68,6 +68,7 @@
     "test:integration": "vitest run src/__tests__/integration",
     "test:integration:redpanda": "docker compose --profile redpanda up -d --wait && vitest run src/__tests__/integration",
     "test:integration:kafka": "docker compose --profile kafka up -d --wait && vitest run src/__tests__/integration",
+    "test:integration:sasl": "docker compose --profile kafka-sasl up -d && sleep 25 && KAFKA_SASL_PORT=9094 vitest run src/__tests__/integration/sasl.test.ts",
     "test:unit": "vitest run src/__tests__/unit",
     "test:watch": "vitest",
     "test": "vitest run src/__tests__/unit",

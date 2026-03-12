@@ -15,7 +15,7 @@
  */
 
 import { ApiKey, negotiateVersion } from "../codec/api-keys.js"
-import type { BrokerAddress, TlsConfig } from "../config.js"
+import type { BrokerAddress, SaslConfig, TlsConfig } from "../config.js"
 import { KafkaConnectionError } from "../errors.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "../protocol/api-versions.js"
 import {
@@ -74,6 +74,8 @@ export type ConnectionPoolOptions = {
   readonly clientId?: string
   /** TLS configuration. */
   readonly tls?: TlsConfig
+  /** SASL authentication configuration. */
+  readonly sasl?: SaslConfig
   /** Connection timeout in milliseconds (default: 30000). */
   readonly connectTimeoutMs?: number
   /** Per-request timeout in milliseconds (default: 30000). */
@@ -128,6 +130,7 @@ export async function discoverBrokers(
   options?: {
     readonly clientId?: string
     readonly tls?: TlsConfig
+    readonly sasl?: SaslConfig
     readonly connectTimeoutMs?: number
     readonly requestTimeoutMs?: number
   }
@@ -145,12 +148,14 @@ export async function discoverBrokers(
       socketFactory,
       clientId: options?.clientId,
       tls: options?.tls,
+      sasl: options?.sasl,
       connectTimeoutMs: options?.connectTimeoutMs,
       requestTimeoutMs: options?.requestTimeoutMs
     })
 
     try {
       await conn.connect()
+      await conn.authenticate()
 
       const brokers = await fetchBrokerMetadata(conn)
       return brokers
@@ -273,6 +278,7 @@ export class ConnectionPool {
   private readonly socketFactory: SocketFactory
   private readonly clientId?: string
   private readonly tls?: TlsConfig
+  private readonly sasl?: SaslConfig
   private readonly connectTimeoutMs?: number
   private readonly requestTimeoutMs?: number
   private readonly maxConnectionsPerBroker: number
@@ -283,6 +289,7 @@ export class ConnectionPool {
     this.socketFactory = options.socketFactory
     this.clientId = options.clientId
     this.tls = options.tls
+    this.sasl = options.sasl
     this.connectTimeoutMs = options.connectTimeoutMs
     this.requestTimeoutMs = options.requestTimeoutMs
     this.maxConnectionsPerBroker =
@@ -323,6 +330,7 @@ export class ConnectionPool {
     const discovered = await discoverBrokers(this.bootstrapBrokers, this.socketFactory, {
       clientId: this.clientId,
       tls: this.tls,
+      sasl: this.sasl,
       connectTimeoutMs: this.connectTimeoutMs,
       requestTimeoutMs: this.requestTimeoutMs
     })
@@ -360,6 +368,7 @@ export class ConnectionPool {
     const discovered = await discoverBrokers(addresses, this.socketFactory, {
       clientId: this.clientId,
       tls: this.tls,
+      sasl: this.sasl,
       connectTimeoutMs: this.connectTimeoutMs,
       requestTimeoutMs: this.requestTimeoutMs
     })
@@ -414,6 +423,7 @@ export class ConnectionPool {
     if (totalConnections < this.maxConnectionsPerBroker) {
       const conn = this.createConnection(host, port)
       await conn.connect()
+      await conn.authenticate()
       entry.active.add(conn)
       return conn
     }
@@ -545,6 +555,7 @@ export class ConnectionPool {
       socketFactory: this.socketFactory,
       clientId: this.clientId,
       tls: this.tls,
+      sasl: this.sasl,
       connectTimeoutMs: this.connectTimeoutMs,
       requestTimeoutMs: this.requestTimeoutMs
     })
@@ -560,19 +571,25 @@ export class ConnectionPool {
       return
     }
     const conn = this.createConnection(host, port)
-    conn.connect().then(
-      () => {
-        entry.active.add(conn)
-        waiter.resolve(conn)
-      },
-      (error: unknown) => {
-        waiter.reject(
-          error instanceof Error
-            ? error
-            : new KafkaConnectionError(String(error), { broker: brokerKey(host, port) })
-        )
-      }
-    )
+    conn
+      .connect()
+      .then(async () => conn.authenticate())
+      .then(
+        () => {
+          entry.active.add(conn)
+          waiter.resolve(conn)
+        },
+        (error: unknown) => {
+          conn.close().catch(() => {
+            /* intentionally ignore */
+          })
+          waiter.reject(
+            error instanceof Error
+              ? error
+              : new KafkaConnectionError(String(error), { broker: brokerKey(host, port) })
+          )
+        }
+      )
   }
 
   /**
@@ -604,41 +621,47 @@ export class ConnectionPool {
 
       attempt++
       const conn = this.createConnection(host, port)
-      conn.connect().then(
-        () => {
-          this.reconnecting.delete(key)
-          if (this.closed) {
-            // Pool closed while we were reconnecting
+      conn
+        .connect()
+        .then(async () => conn.authenticate())
+        .then(
+          () => {
+            this.reconnecting.delete(key)
+            if (this.closed) {
+              // Pool closed while we were reconnecting
+              conn.close().catch(() => {
+                /* intentionally ignore */
+              })
+              return
+            }
+
+            // Give to a waiter if one is pending, otherwise add to idle
+            if (entry.waiters.length > 0) {
+              const waiter = entry.waiters.shift()
+              if (waiter) {
+                entry.active.add(conn)
+                waiter.resolve(conn)
+                return
+              }
+            }
+            entry.idle.push(conn)
+          },
+          () => {
             conn.close().catch(() => {
               /* intentionally ignore */
             })
-            return
-          }
-
-          // Give to a waiter if one is pending, otherwise add to idle
-          if (entry.waiters.length > 0) {
-            const waiter = entry.waiters.shift()
-            if (waiter) {
-              entry.active.add(conn)
-              waiter.resolve(conn)
+            if (this.closed || attempt >= strategy.maxRetries) {
+              this.reconnecting.delete(key)
               return
             }
-          }
-          entry.idle.push(conn)
-        },
-        () => {
-          if (this.closed || attempt >= strategy.maxRetries) {
-            this.reconnecting.delete(key)
-            return
-          }
 
-          const delay = Math.min(
-            strategy.initialDelayMs * strategy.multiplier ** (attempt - 1),
-            strategy.maxDelayMs
-          )
-          setTimeout(tryReconnect, delay)
-        }
-      )
+            const delay = Math.min(
+              strategy.initialDelayMs * strategy.multiplier ** (attempt - 1),
+              strategy.maxDelayMs
+            )
+            setTimeout(tryReconnect, delay)
+          }
+        )
     }
 
     // Start first attempt after initialDelayMs

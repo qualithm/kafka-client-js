@@ -235,6 +235,7 @@ export class Kafka {
       socketFactory: options.socketFactory,
       clientId: options.config.clientId,
       tls: options.config.tls,
+      sasl: options.config.sasl,
       connectTimeoutMs: options.config.connectionTimeoutMs,
       requestTimeoutMs: options.config.requestTimeoutMs,
       maxConnectionsPerBroker: options.maxConnectionsPerBroker,
