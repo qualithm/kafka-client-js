@@ -73,10 +73,9 @@ export function createPlainAuthenticator(config: SaslConfig): SaslAuthenticator 
       return buf
     },
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async stepAsync(_serverBytes: Uint8Array): Promise<Uint8Array | null> {
       // PLAIN is single-step; the server response is an empty success message
-      return null
+      return Promise.resolve(null)
     }
   }
 }

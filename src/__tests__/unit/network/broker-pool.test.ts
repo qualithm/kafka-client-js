@@ -125,7 +125,6 @@ function createAutoRespondingSocketFactory(
     socket: null
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   ctx.factory = async (options) => {
     ctx.callbacks = {
       onData: options.onData,
@@ -134,7 +133,6 @@ function createAutoRespondingSocketFactory(
     }
 
     const socket: KafkaSocket = {
-      // eslint-disable-next-line @typescript-eslint/require-await
       write: async (data) => {
         ctx.written.push(new Uint8Array(data))
 
@@ -164,7 +162,6 @@ function createAutoRespondingSocketFactory(
           })
         }
       },
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       close: async () => {}
     }
     ctx.socket = socket
@@ -186,7 +183,6 @@ function createSimpleSocketFactory(): MockSocketContext {
     socket: null
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   ctx.factory = async (options) => {
     ctx.callbacks = {
       onData: options.onData,
@@ -195,11 +191,9 @@ function createSimpleSocketFactory(): MockSocketContext {
     }
 
     const socket: KafkaSocket = {
-      // eslint-disable-next-line @typescript-eslint/require-await
       write: async (data) => {
         ctx.written.push(new Uint8Array(data))
       },
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       close: async () => {}
     }
     ctx.socket = socket
@@ -225,10 +219,8 @@ function defaultPoolOptions(factory: SocketFactory): ConnectionPoolOptions {
 function createCustomApiVersionsSocketFactory(
   buildResponse: (correlationId: number) => Uint8Array
 ): SocketFactory {
-  // eslint-disable-next-line @typescript-eslint/require-await
   const factory: SocketFactory = async (options) => {
     const socket: KafkaSocket = {
-      // eslint-disable-next-line @typescript-eslint/require-await
       write: async (data) => {
         const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
         const correlationId = view.getInt32(8)
@@ -237,7 +229,6 @@ function createCustomApiVersionsSocketFactory(
           options.onData(response)
         })
       },
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       close: async () => {}
     }
     return socket
@@ -252,10 +243,8 @@ function createCustomApiVersionsSocketFactory(
 function createCustomRespondingSocketFactory(
   buildResponse: (apiKey: number, correlationId: number) => Uint8Array
 ): SocketFactory {
-  // eslint-disable-next-line @typescript-eslint/require-await
   const factory: SocketFactory = async (options) => {
     const socket: KafkaSocket = {
-      // eslint-disable-next-line @typescript-eslint/require-await
       write: async (data) => {
         const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
         const apiKey = view.getInt16(4)
@@ -265,7 +254,6 @@ function createCustomRespondingSocketFactory(
           options.onData(response)
         })
       },
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       close: async () => {}
     }
     return socket
@@ -327,7 +315,6 @@ describe("discoverBrokers", () => {
   })
 
   it("throws KafkaConnectionError when all bootstrap brokers fail", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
     const factory: SocketFactory = async () => {
       throw new Error("ECONNREFUSED")
     }
@@ -565,13 +552,10 @@ describe("ConnectionPool", () => {
 
     it("creates up to maxConnectionsPerBroker connections", async () => {
       let connectCount = 0
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async () => {
         connectCount++
         return {
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           write: async () => {},
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           close: async () => {}
         }
       }
@@ -693,12 +677,9 @@ describe("ConnectionPool", () => {
 
     it("discards disconnected connections", async () => {
       const closedSockets: KafkaSocket[] = []
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async () => {
         const socket: KafkaSocket = {
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           write: async () => {},
-          // eslint-disable-next-line @typescript-eslint/require-await
           close: async () => {
             closedSockets.push(socket)
           }
@@ -741,11 +722,8 @@ describe("ConnectionPool", () => {
     })
 
     it("wakes waiter with new connection when dead connection is released", async () => {
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async (_options) => ({
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         write: async () => {},
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         close: async () => {}
       })
 
@@ -773,16 +751,13 @@ describe("ConnectionPool", () => {
 
     it("rejects waiter when wakeWaiter connection fails", async () => {
       let connectCount = 0
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async () => {
         connectCount++
         if (connectCount > 1) {
           throw new Error("ECONNREFUSED")
         }
         return {
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           write: async () => {},
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           close: async () => {}
         }
       }
@@ -806,11 +781,8 @@ describe("ConnectionPool", () => {
     })
 
     it("skips idle connections that were closed externally", async () => {
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async (_options) => ({
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         write: async () => {},
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         close: async () => {}
       })
 
@@ -882,11 +854,8 @@ describe("ConnectionPool", () => {
   describe("close", () => {
     it("closes all connections", async () => {
       let closeCount = 0
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async () => ({
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         write: async () => {},
-        // eslint-disable-next-line @typescript-eslint/require-await
         close: async () => {
           closeCount++
         }
@@ -1064,15 +1033,12 @@ describe("ConnectionPool", () => {
 
     it("gives reconnected connection to waiting caller", async () => {
       let connectCount = 0
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async (_options) => {
         connectCount++
         const socket: KafkaSocket = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           write: async (data) => {
             void data
           },
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           close: async () => {}
         }
         return socket

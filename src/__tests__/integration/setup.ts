@@ -17,10 +17,8 @@ import type { SocketFactory } from "../../network/socket"
 
 /** Broker address for integration tests, configurable via env vars. */
 export function getBroker(): { host: string; port: number } {
-  // eslint-disable-next-line @typescript-eslint/dot-notation
-  const host = process.env["KAFKA_HOST"] ?? "localhost"
-  // eslint-disable-next-line @typescript-eslint/dot-notation
-  const port = Number(process.env["KAFKA_PORT"] ?? "9092")
+  const host = process.env.KAFKA_HOST ?? "localhost"
+  const port = Number(process.env.KAFKA_PORT ?? "9092")
   return { host, port }
 }
 

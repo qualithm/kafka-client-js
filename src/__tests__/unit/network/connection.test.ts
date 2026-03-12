@@ -10,7 +10,6 @@ import type { KafkaSocket, SocketFactory } from "../../../network/socket"
 // Test helpers
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-empty-function
 const noop = (): void => {}
 
 type MockSocketContext = {
@@ -48,11 +47,9 @@ function createMockSocketFactory(
     }
 
     const socket: KafkaSocket = {
-      // eslint-disable-next-line @typescript-eslint/require-await
       write: async (data) => {
         ctx.written.push(new Uint8Array(data))
       },
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       close: async () => {}
     }
     ctx.socket = socket
@@ -156,10 +153,8 @@ describe("KafkaConnection", () => {
 
     it("passes TLS config to the socket factory", async () => {
       let capturedTls: unknown
-      // eslint-disable-next-line @typescript-eslint/require-await
       const factory: SocketFactory = async (options) => {
         capturedTls = options.tls
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         return { write: async () => {}, close: async () => {} }
       }
       conn = new KafkaConnection({
@@ -192,8 +187,7 @@ describe("KafkaConnection", () => {
     })
 
     it("throws KafkaTimeoutError when connection times out", async () => {
-      // eslint-disable-next-line @typescript-eslint/promise-function-async
-      const factory: SocketFactory = () => new Promise(noop) // Never resolves
+      const factory: SocketFactory = async () => new Promise(noop) // Never resolves
       conn = new KafkaConnection({
         ...defaultOptions(factory),
         connectTimeoutMs: 50
@@ -203,8 +197,7 @@ describe("KafkaConnection", () => {
     })
 
     it("throws KafkaConnectionError when socket factory rejects", async () => {
-      // eslint-disable-next-line @typescript-eslint/promise-function-async
-      const factory: SocketFactory = () => Promise.reject(new Error("ECONNREFUSED"))
+      const factory: SocketFactory = async () => Promise.reject(new Error("ECONNREFUSED"))
       conn = new KafkaConnection(defaultOptions(factory))
 
       await expect(conn.connect()).rejects.toThrow(KafkaConnectionError)
@@ -348,11 +341,9 @@ describe("KafkaConnection", () => {
 
     it("rejects when socket write fails", async () => {
       const failingMock = createMockSocketFactory(() => ({
-        // eslint-disable-next-line @typescript-eslint/require-await
         write: async () => {
           throw new Error("write failed")
         },
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         close: async () => {}
       }))
       const failConn = new KafkaConnection(defaultOptions(failingMock.factory))
@@ -471,10 +462,8 @@ describe("KafkaConnection", () => {
       let responseIndex = 0
       let correlationId = 0
 
-      // eslint-disable-next-line @typescript-eslint/promise-function-async
-      return createMockSocketFactory((ctx) => {
+      return createMockSocketFactory(async (ctx) => {
         const socket: KafkaSocket = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           write: async (data) => {
             ctx.written.push(new Uint8Array(data))
             if (responseIndex < responseFrames.length) {
@@ -486,7 +475,6 @@ describe("KafkaConnection", () => {
               })
             }
           },
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           close: async () => {}
         }
         return Promise.resolve(socket)
@@ -615,11 +603,9 @@ describe("KafkaConnection", () => {
       let requestCount = 0
       let clientNonce = ""
 
-      // eslint-disable-next-line @typescript-eslint/promise-function-async
-      const mock = createMockSocketFactory((ctx) => {
+      const mock = createMockSocketFactory(async (ctx) => {
         let correlationId = 0
         const socket: KafkaSocket = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           write: async (data) => {
             ctx.written.push(new Uint8Array(data))
             requestCount++
@@ -659,7 +645,6 @@ describe("KafkaConnection", () => {
               ctx.callbacks!.onData(frame)
             })
           },
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           close: async () => {}
         }
         return Promise.resolve(socket)
@@ -686,11 +671,9 @@ describe("KafkaConnection", () => {
 
       let requestCount = 0
 
-      // eslint-disable-next-line @typescript-eslint/promise-function-async
-      const mock = createMockSocketFactory((ctx) => {
+      const mock = createMockSocketFactory(async (ctx) => {
         let correlationId = 0
         const socket: KafkaSocket = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           write: async (data) => {
             ctx.written.push(new Uint8Array(data))
             requestCount++
@@ -711,7 +694,6 @@ describe("KafkaConnection", () => {
               ctx.callbacks!.onData(frame)
             })
           },
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           close: async () => {}
         }
         return Promise.resolve(socket)
@@ -731,11 +713,9 @@ describe("KafkaConnection", () => {
 
       let requestCount = 0
 
-      // eslint-disable-next-line @typescript-eslint/promise-function-async
-      const mock = createMockSocketFactory((ctx) => {
+      const mock = createMockSocketFactory(async (ctx) => {
         let correlationId = 0
         const socket: KafkaSocket = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           write: async (data) => {
             ctx.written.push(new Uint8Array(data))
             requestCount++
@@ -761,7 +741,6 @@ describe("KafkaConnection", () => {
               ctx.callbacks!.onData(frame)
             })
           },
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           close: async () => {}
         }
         return Promise.resolve(socket)

@@ -104,12 +104,12 @@ async function connectDenoSocket(options: SocketConnectOptions): Promise<KafkaSo
       }
     },
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async close(): Promise<void> {
       if (!closed) {
         closed = true
         conn.close()
       }
+      return Promise.resolve()
     }
   }
 }

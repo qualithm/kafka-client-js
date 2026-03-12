@@ -147,13 +147,11 @@ describe("SchemaRegistry", () => {
     typeof vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>
   > {
     let callIndex = 0
-    // eslint-disable-next-line @typescript-eslint/require-await
     return vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => {
       const response = responses[callIndex++]
       return {
         ok: response.status >= 200 && response.status < 300,
         status: response.status,
-        // eslint-disable-next-line @typescript-eslint/require-await
         json: async () => response.body
       } as Response
     })
@@ -352,7 +350,6 @@ describe("SchemaRegistry", () => {
   it("throws retriable error on network failure", async () => {
     vi.stubGlobal(
       "fetch",
-      // eslint-disable-next-line @typescript-eslint/require-await
       vi.fn(async () => {
         throw new TypeError("fetch failed")
       })

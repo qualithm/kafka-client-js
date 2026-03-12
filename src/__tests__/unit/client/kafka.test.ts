@@ -81,8 +81,7 @@ function createAutoRespondingSocketFactory(
 ): { factory: SocketFactory; callbacks: MockSocketCallbacks | null } {
   let callbacks: MockSocketCallbacks | null = null
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  const factory: SocketFactory = async (options) => {
+  const factory: SocketFactory = (options) => {
     callbacks = {
       onData: options.onData,
       onError: options.onError,
@@ -90,8 +89,7 @@ function createAutoRespondingSocketFactory(
     }
 
     const socket: KafkaSocket = {
-      // eslint-disable-next-line @typescript-eslint/require-await
-      write: async (data) => {
+      write: (data) => {
         const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
         const apiKey = view.getInt16(4)
         const correlationId = view.getInt32(8)
@@ -108,11 +106,11 @@ function createAutoRespondingSocketFactory(
           const response = buildMockResponse(correlationId, body)
           queueMicrotask(() => callbacks?.onData(response))
         }
+        return Promise.resolve()
       },
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      close: async () => {}
+      close: () => Promise.resolve()
     }
-    return socket
+    return Promise.resolve(socket)
   }
 
   return {
@@ -127,9 +125,8 @@ function createAutoRespondingSocketFactory(
  * Create a socket factory that rejects all connections.
  */
 function createFailingSocketFactory(): SocketFactory {
-  // eslint-disable-next-line @typescript-eslint/require-await
-  return async () => {
-    throw new Error("connection refused")
+  return () => {
+    return Promise.reject(new Error("connection refused"))
   }
 }
 
@@ -138,8 +135,10 @@ function createFailingSocketFactory(): SocketFactory {
  * Useful for keeping the client stuck in "connecting" state.
  */
 function createHangingSocketFactory(): SocketFactory {
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  return async () => new Promise<KafkaSocket>(() => {})
+  return () =>
+    new Promise<KafkaSocket>(() => {
+      /* never resolves */
+    })
 }
 
 /**

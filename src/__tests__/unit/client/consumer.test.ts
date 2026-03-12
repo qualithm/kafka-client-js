@@ -225,12 +225,11 @@ function createMockConnection(
 } {
   let callIndex = 0
   return {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    send: vi.fn(async () => {
+    send: vi.fn(() => {
       if (callIndex >= responses.length) {
-        throw new Error("no more mock responses")
+        return Promise.reject(new Error("no more mock responses"))
       }
-      return new BinaryReader(responses[callIndex++])
+      return Promise.resolve(new BinaryReader(responses[callIndex++]))
     }),
     broker: brokerAddr,
     connected: true
@@ -241,17 +240,18 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
   return {
     brokers: new Map(),
     isClosed: false,
-    connect: async () => Promise.resolve(),
-    refreshMetadata: async () => Promise.resolve(),
+    connect: () => Promise.resolve(),
+    refreshMetadata: () => Promise.resolve(),
     getConnection: () => {
       throw new Error("not implemented")
     },
     getConnectionByNodeId: () => {
       throw new Error("not implemented")
     },
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    releaseConnection: () => {},
-    close: async () => Promise.resolve(),
+    releaseConnection: () => {
+      /* noop */
+    },
+    close: () => Promise.resolve(),
     connectionCount: () => 0,
     ...overrides
   } as unknown as ConnectionPool
@@ -575,14 +575,13 @@ describe("KafkaConsumer", () => {
         brokers: new Map([
           [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
         ]) as ConnectionPool["brokers"],
-        // eslint-disable-next-line @typescript-eslint/require-await
-        getConnectionByNodeId: vi.fn(async () => {
+        getConnectionByNodeId: vi.fn(() => {
           callCount++
           // First getConnectionByNodeId call is the failing attempt
           if (callCount <= 1) {
-            return failConn
+            return Promise.resolve(failConn)
           }
-          return successConn
+          return Promise.resolve(successConn)
         }) as unknown as ConnectionPool["getConnectionByNodeId"],
         releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
       })
@@ -1643,12 +1642,11 @@ describe("KafkaConsumer", () => {
       const originalSend = conn.send.getMockImplementation()
       let callsSoFar = 0
       const joinFlowCalls = conn.send.mock.calls.length
-      // eslint-disable-next-line @typescript-eslint/require-await
-      conn.send = vi.fn(async (...args: unknown[]) => {
+      conn.send = vi.fn((...args: unknown[]) => {
         callsSoFar++
         // After join flow, fail heartbeat attempts
         if (callsSoFar > joinFlowCalls + 20) {
-          throw new Error("connection lost")
+          return Promise.reject(new Error("connection lost"))
         }
         return (originalSend as (...a: unknown[]) => unknown)(...args)
       })

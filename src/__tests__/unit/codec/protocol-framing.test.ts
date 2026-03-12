@@ -20,7 +20,6 @@ import {
   responseHeaderVersion
 } from "../../../codec/protocol-framing"
 
-// eslint-disable-next-line @typescript-eslint/no-empty-function
 const noop = (): void => {}
 
 // ---------------------------------------------------------------------------

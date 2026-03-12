@@ -35,7 +35,6 @@ function createMockConn(): MockDenoConn {
   return {
     readable,
     write: vi.fn<(data: Uint8Array) => Promise<number>>().mockImplementation(
-      // eslint-disable-next-line @typescript-eslint/require-await
       async (data: Uint8Array) => data.byteLength
     ),
     close: vi.fn()

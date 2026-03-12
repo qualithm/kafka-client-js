@@ -94,9 +94,9 @@ async function connectBunSocket(options: SocketConnectOptions): Promise<KafkaSoc
       socket.flush()
     },
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async close(): Promise<void> {
       socket.end()
+      return Promise.resolve()
     }
   }
 }

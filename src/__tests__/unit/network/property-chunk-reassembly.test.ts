@@ -43,7 +43,6 @@ function createMockSocketFactory(): MockSocketContext {
     socket: null
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   ctx.factory = async (options) => {
     ctx.callbacks = {
       onData: options.onData,
@@ -52,11 +51,9 @@ function createMockSocketFactory(): MockSocketContext {
     }
 
     const socket: KafkaSocket = {
-      // eslint-disable-next-line @typescript-eslint/require-await
       write: async (data) => {
         ctx.written.push(new Uint8Array(data))
       },
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       close: async () => {}
     }
     ctx.socket = socket
@@ -91,7 +88,6 @@ function defaultOptions(factory: SocketFactory): ConnectionOptions {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-function
 const noop = (): void => {}
 
 /**
@@ -175,8 +171,7 @@ describe("property-based: connection chunk reassembly", () => {
           await conn.connect()
 
           // Send all requests
-          // eslint-disable-next-line @typescript-eslint/promise-function-async
-          const promises = bodies.map(() => conn.send(ApiKey.ApiVersions, 0, noop))
+          const promises = bodies.map(async () => conn.send(ApiKey.ApiVersions, 0, noop))
 
           // Build responses and concatenate into one buffer
           const responses = bodies.map((body, i) => buildMockResponse(i, body))
@@ -220,8 +215,7 @@ describe("property-based: connection chunk reassembly", () => {
           conn = new KafkaConnection(defaultOptions(mock.factory))
           await conn.connect()
 
-          // eslint-disable-next-line @typescript-eslint/promise-function-async
-          const promises = bodies.map(() => conn.send(ApiKey.ApiVersions, 0, noop))
+          const promises = bodies.map(async () => conn.send(ApiKey.ApiVersions, 0, noop))
 
           // Build all responses and concatenate
           const responses = bodies.map((body, i) => buildMockResponse(i, body))

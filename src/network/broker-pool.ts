@@ -609,8 +609,9 @@ export class ConnectionPool {
           this.reconnecting.delete(key)
           if (this.closed) {
             // Pool closed while we were reconnecting
-            // eslint-disable-next-line @typescript-eslint/no-empty-function
-            conn.close().catch(() => {})
+            conn.close().catch(() => {
+              /* intentionally ignore */
+            })
             return
           }
 

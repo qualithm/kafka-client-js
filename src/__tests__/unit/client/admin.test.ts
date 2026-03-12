@@ -48,12 +48,11 @@ function createMockConnection(
 } {
   let callIndex = 0
   return {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    send: vi.fn(async () => {
+    send: vi.fn(() => {
       if (callIndex >= responses.length) {
         throw new Error("no more mock responses")
       }
-      return new BinaryReader(responses[callIndex++])
+      return Promise.resolve(new BinaryReader(responses[callIndex++]))
     }),
     broker: brokerAddr,
     connected: true
@@ -64,20 +63,18 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
   return {
     brokers: new Map(),
     isClosed: false,
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    connect: async () => {},
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    refreshMetadata: async () => {},
+    connect: () => Promise.resolve(),
+    refreshMetadata: () => Promise.resolve(),
     getConnection: () => {
       throw new Error("not implemented")
     },
     getConnectionByNodeId: () => {
       throw new Error("not implemented")
     },
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    releaseConnection: () => {},
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    close: async () => {},
+    releaseConnection: () => {
+      /* noop */
+    },
+    close: () => Promise.resolve(),
     connectionCount: () => 0,
     ...overrides
   } as unknown as ConnectionPool
@@ -87,9 +84,8 @@ function poolWithConn(mockConn: ReturnType<typeof createMockConnection>): Connec
   const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
   return createMockPool({
     brokers: brokerMap as ConnectionPool["brokers"],
-    getConnectionByNodeId: vi.fn(
-      // eslint-disable-next-line @typescript-eslint/require-await
-      async () => mockConn
+    getConnectionByNodeId: vi.fn(() =>
+      Promise.resolve(mockConn)
     ) as unknown as ConnectionPool["getConnectionByNodeId"],
     releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
   })
@@ -466,21 +462,20 @@ describe("KafkaAdmin", () => {
       let callCount = 0
       const conn = createMockConnection([])
       // Override send to fail once then succeed
-      // eslint-disable-next-line @typescript-eslint/require-await
-      conn.send = vi.fn(async () => {
+      conn.send = vi.fn(() => {
         callCount++
         if (callCount <= 2) {
           // First two calls: ApiVersions succeeds, CreateTopics fails
           if (callCount === 1) {
-            return new BinaryReader(buildApiVersionsBody(STANDARD_APIS))
+            return Promise.resolve(new BinaryReader(buildApiVersionsBody(STANDARD_APIS)))
           }
-          throw new KafkaConnectionError("connection reset", { retriable: true })
+          return Promise.reject(new KafkaConnectionError("connection reset", { retriable: true }))
         }
         if (callCount === 3) {
-          return new BinaryReader(buildApiVersionsBody(STANDARD_APIS))
+          return Promise.resolve(new BinaryReader(buildApiVersionsBody(STANDARD_APIS)))
         }
         // Fourth call: CreateTopics succeeds
-        return new BinaryReader(buildCreateTopicsResponseBody())
+        return Promise.resolve(new BinaryReader(buildCreateTopicsResponseBody()))
       })
 
       const pool = poolWithConn(conn)
@@ -507,13 +502,12 @@ describe("KafkaAdmin", () => {
       let responseIndex = 0
       let callCount = 0
       const conn = {
-        // eslint-disable-next-line @typescript-eslint/require-await
-        send: vi.fn(async () => {
+        send: vi.fn(() => {
           callCount++
           if (callCount === 2) {
-            throw new KafkaConnectionError("not authorised", { retriable: false })
+            return Promise.reject(new KafkaConnectionError("not authorised", { retriable: false }))
           }
-          return new BinaryReader(responses[responseIndex++])
+          return Promise.resolve(new BinaryReader(responses[responseIndex++]))
         }),
         broker: "localhost:9092",
         connected: true
@@ -752,7 +746,6 @@ describe("KafkaAdmin", () => {
         timeoutMs: 5000
       })
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(pool.releaseConnection).toHaveBeenCalledWith(conn)
     })
 
@@ -771,7 +764,6 @@ describe("KafkaAdmin", () => {
         })
       ).rejects.toThrow()
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(pool.releaseConnection).toHaveBeenCalledWith(conn)
     })
   })

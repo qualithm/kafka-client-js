@@ -30,13 +30,11 @@ function mockFetch(
   typeof vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>
 > {
   let callIndex = 0
-  // eslint-disable-next-line @typescript-eslint/require-await
   return vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => {
     const response = responses[callIndex++]
     return {
       ok: response.status >= 200 && response.status < 300,
       status: response.status,
-      // eslint-disable-next-line @typescript-eslint/require-await
       json: async () => response.body
     } as Response
   })

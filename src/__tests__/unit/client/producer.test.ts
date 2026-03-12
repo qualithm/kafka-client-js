@@ -181,12 +181,11 @@ function createMockConnection(
 } {
   let callIndex = 0
   return {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    send: vi.fn(async () => {
+    send: vi.fn(() => {
       if (callIndex >= responses.length) {
-        throw new Error("no more mock responses")
+        return Promise.reject(new Error("no more mock responses"))
       }
-      return new BinaryReader(responses[callIndex++])
+      return Promise.resolve(new BinaryReader(responses[callIndex++]))
     }),
     broker: brokerAddr,
     connected: true
@@ -200,20 +199,18 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
   return {
     brokers: new Map(),
     isClosed: false,
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    connect: async () => {},
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    refreshMetadata: async () => {},
+    connect: () => Promise.resolve(),
+    refreshMetadata: () => Promise.resolve(),
     getConnection: () => {
       throw new Error("not implemented")
     },
     getConnectionByNodeId: () => {
       throw new Error("not implemented")
     },
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    releaseConnection: () => {},
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    close: async () => {},
+    releaseConnection: () => {
+      /* noop */
+    },
+    close: () => Promise.resolve(),
     connectionCount: () => 0,
     ...overrides
   } as unknown as ConnectionPool
@@ -247,7 +244,6 @@ function createPoolWithBroker(
   let getConnCallCount = 0
   const pool = createMockPool({
     brokers: brokerMap as ConnectionPool["brokers"],
-    // eslint-disable-next-line @typescript-eslint/require-await
     getConnectionByNodeId: vi.fn(async () => {
       getConnCallCount++
       // First call is for metadata refresh, remaining are for produce
@@ -631,7 +627,6 @@ describe("KafkaProducer send (integration path)", () => {
     let getConnCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         if (getConnCall === 1) {
@@ -821,7 +816,6 @@ describe("KafkaProducer send (integration path)", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -850,7 +844,6 @@ describe("KafkaProducer send (integration path)", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -887,7 +880,6 @@ describe("KafkaProducer send (integration path)", () => {
     let callN = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         callN++
         return callN === 1 ? metadataConn : produceConn
@@ -911,7 +903,6 @@ describe("KafkaProducer send (integration path)", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -955,7 +946,6 @@ describe("KafkaProducer send (integration path)", () => {
     let n = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return n === 1 ? metadataConn : produceConn
@@ -1002,7 +992,6 @@ describe("KafkaProducer send (integration path)", () => {
     let n = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return n === 1 ? metadataConn : produceConn
@@ -1055,7 +1044,6 @@ describe("KafkaProducer send (integration path)", () => {
     let getConnCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         // 1st call: InitProducerId, 2nd: metadata, 3rd: produce
@@ -1110,7 +1098,6 @@ describe("KafkaProducer send (integration path)", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -1142,7 +1129,6 @@ describe("KafkaProducer send (integration path)", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -1330,7 +1316,6 @@ describe("KafkaProducer sendToPartition (integration path)", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -1375,7 +1360,6 @@ describe("KafkaProducer edge-case errors", () => {
     let n = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return n === 1 ? metadataConn : produceConn
@@ -1398,7 +1382,6 @@ describe("KafkaProducer edge-case errors", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -1423,7 +1406,6 @@ describe("KafkaProducer edge-case errors", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -1461,7 +1443,6 @@ describe("KafkaProducer edge-case errors", () => {
     let n = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return n === 1 ? metadataConn : produceConn
@@ -1486,7 +1467,6 @@ describe("KafkaProducer edge-case errors", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => metadataConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -1522,7 +1502,6 @@ describe("KafkaProducer edge-case errors", () => {
     let n = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return n === 1 ? metadataConn : produceConn
@@ -1728,7 +1707,6 @@ describe("KafkaProducer batching", () => {
     let n = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return n === 1 ? metadataConn : produceConn
@@ -1852,7 +1830,6 @@ describe("KafkaProducer retry", () => {
     let getConnCalls = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCalls++
         // Odd calls for metadata, even calls for produce
@@ -1954,7 +1931,6 @@ describe("KafkaProducer retry", () => {
     let getConnCalls = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCalls++
         return getConnCalls % 2 === 1 ? metadataConn : produceConn
@@ -2029,7 +2005,6 @@ describe("KafkaProducer retry", () => {
     let getConnCalls = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCalls++
         return getConnCalls % 2 === 1 ? metadataConn : produceConn
@@ -2113,7 +2088,6 @@ describe("KafkaProducer idempotent", () => {
     let getConnCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         // 1st: InitProducerId, 2nd: metadata, 3rd+: produce
@@ -2238,7 +2212,6 @@ describe("KafkaProducer idempotent", () => {
     let getConnCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         if (getConnCall === 1) {
@@ -2306,7 +2279,6 @@ describe("KafkaProducer idempotent", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => initPidConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -2330,7 +2302,6 @@ describe("KafkaProducer idempotent", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => initPidConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -2524,7 +2495,6 @@ describe("KafkaProducer transactional", () => {
     let getConnByIdCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -2535,7 +2505,6 @@ describe("KafkaProducer transactional", () => {
         }
         return produceConn
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnection: vi.fn(async () => {
         return coordinatorConn
       }) as unknown as ConnectionPool["getConnection"],
@@ -2819,7 +2788,6 @@ describe("KafkaProducer transactional", () => {
     let getConnByIdCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -2827,7 +2795,6 @@ describe("KafkaProducer transactional", () => {
         }
         return metadataConn
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnection: vi.fn(async () => {
         return coordinatorConn
       }) as unknown as ConnectionPool["getConnection"],
@@ -2858,7 +2825,6 @@ describe("KafkaProducer transactional", () => {
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         return coordinatorConn
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -2993,7 +2959,6 @@ describe("KafkaProducer transactional", () => {
     let getConnCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3010,7 +2975,6 @@ describe("KafkaProducer transactional", () => {
         } // FindGroupCoordinator discovery
         return produceConn
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnection: vi.fn(async () => {
         getConnCall++
         if (getConnCall <= 3) {
@@ -3094,7 +3058,6 @@ describe("KafkaProducer transactional", () => {
     let getConnByIdCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3106,7 +3069,6 @@ describe("KafkaProducer transactional", () => {
         return produceConn
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
       getConnection: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => coordinatorConn
       ) as unknown as ConnectionPool["getConnection"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -3166,7 +3128,6 @@ describe("KafkaProducer transactional", () => {
     let getConnByIdCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3181,7 +3142,6 @@ describe("KafkaProducer transactional", () => {
         return produceConn2
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
       getConnection: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => coordinatorConn
       ) as unknown as ConnectionPool["getConnection"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -3217,11 +3177,9 @@ describe("KafkaProducer transactional", () => {
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
       getConnectionByNodeId: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => coordinatorConn
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
       getConnection: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => coordinatorConn
       ) as unknown as ConnectionPool["getConnection"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -3263,7 +3221,6 @@ describe("KafkaProducer transactional", () => {
     let getConnByIdCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3272,7 +3229,6 @@ describe("KafkaProducer transactional", () => {
         return metadataConn
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
       getConnection: vi.fn(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => coordinatorConn
       ) as unknown as ConnectionPool["getConnection"],
       releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -3407,7 +3363,6 @@ describe("KafkaProducer transactional", () => {
     let getConnCall = 0
     const pool = createMockPool({
       brokers: brokerMap as ConnectionPool["brokers"],
-      // eslint-disable-next-line @typescript-eslint/require-await
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         if (getConnCall === 1) {
