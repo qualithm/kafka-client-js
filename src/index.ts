@@ -597,3 +597,19 @@ export {
   decodeOffsetForLeaderEpochResponse,
   encodeOffsetForLeaderEpochRequest
 } from "./protocol/offset-for-leader-epoch.js"
+
+// ElectLeaders API
+export type {
+  ElectionType,
+  ElectLeadersPartitionRequest,
+  ElectLeadersPartitionResponse,
+  ElectLeadersRequest,
+  ElectLeadersResponse,
+  ElectLeadersTopicRequest,
+  ElectLeadersTopicResponse
+} from "./protocol/elect-leaders.js"
+export {
+  buildElectLeadersRequest,
+  decodeElectLeadersResponse,
+  encodeElectLeadersRequest
+} from "./protocol/elect-leaders.js"
