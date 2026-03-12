@@ -6,6 +6,7 @@
   "excludePrivate": true,
   "excludeProtected": true,
   "excludeExternals": true,
+  "excludeInternal": true,
   "includeVersion": true,
   "externalSymbolLinkMappings": {
     "typescript": {
@@ -14,5 +15,21 @@
   },
   "navigationLinks": {
     "GitHub": "https://github.com/qualithm/kafka-client-js"
-  }
+  },
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": true
+  },
+  "requiredToBeDocumented": [
+    "Enum",
+    "EnumMember",
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "Property",
+    "Method",
+    "TypeAlias"
+  ]
 }

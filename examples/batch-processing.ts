@@ -20,7 +20,7 @@ import {
   type Message,
   parseBrokerAddress,
   type TopicPartition
-} from "../src/index"
+} from "@qualithm/kafka-client"
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await */
 /**
  * Property-based tests for connection-level chunk reassembly.
  *
@@ -53,8 +54,9 @@ function createMockSocketFactory(): MockSocketContext {
     const socket: KafkaSocket = {
       write: async (data) => {
         ctx.written.push(new Uint8Array(data))
+        return Promise.resolve()
       },
-      close: async () => {}
+      close: async () => Promise.resolve()
     }
     ctx.socket = socket
     return socket
@@ -88,7 +90,9 @@ function defaultOptions(factory: SocketFactory): ConnectionOptions {
   }
 }
 
-const noop = (): void => {}
+const noop = (): void => {
+  /* noop */
+}
 
 /**
  * Split a Uint8Array into chunks at the given split points.

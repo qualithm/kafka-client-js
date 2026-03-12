@@ -14,7 +14,7 @@
 
 /* eslint-disable no-console */
 
-import { createKafka, createNodeSocketFactory } from "../src/index"
+import { createKafka, createNodeSocketFactory } from "@qualithm/kafka-client"
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()

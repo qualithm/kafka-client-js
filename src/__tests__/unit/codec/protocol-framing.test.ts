@@ -20,7 +20,9 @@ import {
   responseHeaderVersion
 } from "../../../codec/protocol-framing"
 
-const noop = (): void => {}
+const noop = (): void => {
+  /* noop */
+}
 
 // ---------------------------------------------------------------------------
 // Header version selection

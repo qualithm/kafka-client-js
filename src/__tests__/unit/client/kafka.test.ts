@@ -81,7 +81,7 @@ function createAutoRespondingSocketFactory(
 ): { factory: SocketFactory; callbacks: MockSocketCallbacks | null } {
   let callbacks: MockSocketCallbacks | null = null
 
-  const factory: SocketFactory = (options) => {
+  const factory: SocketFactory = async (options) => {
     callbacks = {
       onData: options.onData,
       onError: options.onError,
@@ -89,7 +89,7 @@ function createAutoRespondingSocketFactory(
     }
 
     const socket: KafkaSocket = {
-      write: (data) => {
+      write: async (data) => {
         const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
         const apiKey = view.getInt16(4)
         const correlationId = view.getInt32(8)
@@ -108,7 +108,7 @@ function createAutoRespondingSocketFactory(
         }
         return Promise.resolve()
       },
-      close: () => Promise.resolve()
+      close: async () => Promise.resolve()
     }
     return Promise.resolve(socket)
   }
@@ -125,7 +125,7 @@ function createAutoRespondingSocketFactory(
  * Create a socket factory that rejects all connections.
  */
 function createFailingSocketFactory(): SocketFactory {
-  return () => {
+  return async () => {
     return Promise.reject(new Error("connection refused"))
   }
 }
@@ -135,7 +135,7 @@ function createFailingSocketFactory(): SocketFactory {
  * Useful for keeping the client stuck in "connecting" state.
  */
 function createHangingSocketFactory(): SocketFactory {
-  return () =>
+  return async () =>
     new Promise<KafkaSocket>(() => {
       /* never resolves */
     })

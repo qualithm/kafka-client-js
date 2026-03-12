@@ -149,11 +149,11 @@ describe("SchemaRegistry", () => {
     let callIndex = 0
     return vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => {
       const response = responses[callIndex++]
-      return {
+      return Promise.resolve({
         ok: response.status >= 200 && response.status < 300,
         status: response.status,
-        json: async () => response.body
-      } as Response
+        json: async () => Promise.resolve(response.body)
+      } as Response)
     })
   }
 
@@ -350,7 +350,7 @@ describe("SchemaRegistry", () => {
   it("throws retriable error on network failure", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new TypeError("fetch failed")
       })
     )

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-empty-function */
 import { afterEach, describe, expect, it } from "vitest"
 
 import { ApiKey } from "../../../codec/api-keys"

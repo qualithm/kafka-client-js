@@ -17,7 +17,7 @@ import {
   KafkaError,
   KafkaProtocolError,
   KafkaTimeoutError
-} from "../src/index"
+} from "@qualithm/kafka-client"
 
 /**
  * Simulate handling different error types.

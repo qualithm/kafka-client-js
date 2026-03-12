@@ -19,7 +19,7 @@ import {
   type Message,
   negotiateVersion,
   parseBrokerAddress
-} from "../src/index"
+} from "@qualithm/kafka-client"
 
 function main(): void {
   console.log("=== Basic Usage Examples ===\n")

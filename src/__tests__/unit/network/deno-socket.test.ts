@@ -34,9 +34,9 @@ function createMockConn(): MockDenoConn {
 
   return {
     readable,
-    write: vi.fn<(data: Uint8Array) => Promise<number>>().mockImplementation(
-      async (data: Uint8Array) => data.byteLength
-    ),
+    write: vi
+      .fn<(data: Uint8Array) => Promise<number>>()
+      .mockImplementation(async (data: Uint8Array) => Promise.resolve(data.byteLength)),
     close: vi.fn()
   }
 }

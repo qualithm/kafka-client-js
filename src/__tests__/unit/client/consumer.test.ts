@@ -225,7 +225,7 @@ function createMockConnection(
 } {
   let callIndex = 0
   return {
-    send: vi.fn(() => {
+    send: vi.fn(async () => {
       if (callIndex >= responses.length) {
         return Promise.reject(new Error("no more mock responses"))
       }
@@ -240,8 +240,8 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
   return {
     brokers: new Map(),
     isClosed: false,
-    connect: () => Promise.resolve(),
-    refreshMetadata: () => Promise.resolve(),
+    connect: async () => Promise.resolve(),
+    refreshMetadata: async () => Promise.resolve(),
     getConnection: () => {
       throw new Error("not implemented")
     },
@@ -251,7 +251,7 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
     releaseConnection: () => {
       /* noop */
     },
-    close: () => Promise.resolve(),
+    close: async () => Promise.resolve(),
     connectionCount: () => 0,
     ...overrides
   } as unknown as ConnectionPool
@@ -575,7 +575,7 @@ describe("KafkaConsumer", () => {
         brokers: new Map([
           [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
         ]) as ConnectionPool["brokers"],
-        getConnectionByNodeId: vi.fn(() => {
+        getConnectionByNodeId: vi.fn(async () => {
           callCount++
           // First getConnectionByNodeId call is the failing attempt
           if (callCount <= 1) {

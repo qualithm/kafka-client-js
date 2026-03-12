@@ -48,7 +48,7 @@ function createMockConnection(
 } {
   let callIndex = 0
   return {
-    send: vi.fn(() => {
+    send: vi.fn(async () => {
       if (callIndex >= responses.length) {
         throw new Error("no more mock responses")
       }
@@ -63,8 +63,8 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
   return {
     brokers: new Map(),
     isClosed: false,
-    connect: () => Promise.resolve(),
-    refreshMetadata: () => Promise.resolve(),
+    connect: async () => Promise.resolve(),
+    refreshMetadata: async () => Promise.resolve(),
     getConnection: () => {
       throw new Error("not implemented")
     },
@@ -74,7 +74,7 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
     releaseConnection: () => {
       /* noop */
     },
-    close: () => Promise.resolve(),
+    close: async () => Promise.resolve(),
     connectionCount: () => 0,
     ...overrides
   } as unknown as ConnectionPool
@@ -84,7 +84,7 @@ function poolWithConn(mockConn: ReturnType<typeof createMockConnection>): Connec
   const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
   return createMockPool({
     brokers: brokerMap as ConnectionPool["brokers"],
-    getConnectionByNodeId: vi.fn(() =>
+    getConnectionByNodeId: vi.fn(async () =>
       Promise.resolve(mockConn)
     ) as unknown as ConnectionPool["getConnectionByNodeId"],
     releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
@@ -462,7 +462,7 @@ describe("KafkaAdmin", () => {
       let callCount = 0
       const conn = createMockConnection([])
       // Override send to fail once then succeed
-      conn.send = vi.fn(() => {
+      conn.send = vi.fn(async () => {
         callCount++
         if (callCount <= 2) {
           // First two calls: ApiVersions succeeds, CreateTopics fails
@@ -502,7 +502,7 @@ describe("KafkaAdmin", () => {
       let responseIndex = 0
       let callCount = 0
       const conn = {
-        send: vi.fn(() => {
+        send: vi.fn(async () => {
           callCount++
           if (callCount === 2) {
             return Promise.reject(new KafkaConnectionError("not authorised", { retriable: false }))
@@ -738,7 +738,15 @@ describe("KafkaAdmin", () => {
         buildApiVersionsBody(STANDARD_APIS),
         buildCreateTopicsResponseBody()
       ])
-      const pool = poolWithConn(conn)
+      const releaseSpy = vi.fn()
+      const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: releaseSpy as ConnectionPool["releaseConnection"]
+      })
       const admin = new KafkaAdmin({ connectionPool: pool })
 
       await admin.createTopics({
@@ -746,7 +754,7 @@ describe("KafkaAdmin", () => {
         timeoutMs: 5000
       })
 
-      expect(pool.releaseConnection).toHaveBeenCalledWith(conn)
+      expect(releaseSpy).toHaveBeenCalledWith(conn)
     })
 
     it("releases connection after decode failure", async () => {
@@ -754,7 +762,15 @@ describe("KafkaAdmin", () => {
         buildApiVersionsBody(STANDARD_APIS),
         new Uint8Array(0) // empty response causes decode failure
       ])
-      const pool = poolWithConn(conn)
+      const releaseSpy = vi.fn()
+      const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: releaseSpy as ConnectionPool["releaseConnection"]
+      })
       const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
 
       await expect(
@@ -764,7 +780,7 @@ describe("KafkaAdmin", () => {
         })
       ).rejects.toThrow()
 
-      expect(pool.releaseConnection).toHaveBeenCalledWith(conn)
+      expect(releaseSpy).toHaveBeenCalledWith(conn)
     })
   })
 })
