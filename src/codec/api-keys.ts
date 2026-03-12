@@ -132,7 +132,8 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.DescribeGroups]: { minVersion: 0, maxVersion: 5 },
   [ApiKey.ListGroups]: { minVersion: 0, maxVersion: 4 },
   [ApiKey.DeleteGroups]: { minVersion: 0, maxVersion: 2 },
-  [ApiKey.ElectLeaders]: { minVersion: 0, maxVersion: 2 }
+  [ApiKey.ElectLeaders]: { minVersion: 0, maxVersion: 2 },
+  [ApiKey.IncrementalAlterConfigs]: { minVersion: 0, maxVersion: 1 }
 }
 
 /**
@@ -171,7 +172,8 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.DescribeGroups]: 5,
   [ApiKey.ListGroups]: 3,
   [ApiKey.DeleteGroups]: 2,
-  [ApiKey.ElectLeaders]: 2
+  [ApiKey.ElectLeaders]: 2,
+  [ApiKey.IncrementalAlterConfigs]: 1
 }
 
 /**

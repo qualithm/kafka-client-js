@@ -613,3 +613,19 @@ export {
   decodeElectLeadersResponse,
   encodeElectLeadersRequest
 } from "./protocol/elect-leaders.js"
+
+// IncrementalAlterConfigs API
+export type {
+  AlterConfigOp as AlterConfigOpValue,
+  IncrementalAlterConfigsEntry,
+  IncrementalAlterConfigsRequest,
+  IncrementalAlterConfigsResource,
+  IncrementalAlterConfigsResourceResponse,
+  IncrementalAlterConfigsResponse
+} from "./protocol/incremental-alter-configs.js"
+export {
+  AlterConfigOp,
+  buildIncrementalAlterConfigsRequest,
+  decodeIncrementalAlterConfigsResponse,
+  encodeIncrementalAlterConfigsRequest
+} from "./protocol/incremental-alter-configs.js"
