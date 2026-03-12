@@ -31,6 +31,12 @@ import {
   encodeCreateTopicsRequest
 } from "../protocol/create-topics.js"
 import {
+  decodeDeleteGroupsResponse,
+  type DeleteGroupsRequest,
+  type DeleteGroupsResult,
+  encodeDeleteGroupsRequest
+} from "../protocol/delete-groups.js"
+import {
   decodeDeleteTopicsResponse,
   type DeleteTopicsRequest,
   type DeleteTopicsTopicResponse,
@@ -42,6 +48,18 @@ import {
   type DescribeConfigsResourceResponse,
   encodeDescribeConfigsRequest
 } from "../protocol/describe-configs.js"
+import {
+  decodeDescribeGroupsResponse,
+  type DescribeGroupsGroup,
+  type DescribeGroupsRequest,
+  encodeDescribeGroupsRequest
+} from "../protocol/describe-groups.js"
+import {
+  decodeListGroupsResponse,
+  encodeListGroupsRequest,
+  type ListGroupsGroup,
+  type ListGroupsRequest
+} from "../protocol/list-groups.js"
 import {
   decodeMetadataResponse,
   encodeMetadataRequest,
@@ -361,6 +379,108 @@ export class KafkaAdmin {
         }
 
         return result.value.topics
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe one or more consumer groups.
+   *
+   * Returns detailed metadata about each group including state, protocol,
+   * members, and their current assignments.
+   *
+   * @param request - The DescribeGroups request payload.
+   * @returns Per-group descriptions.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeGroups(request: DescribeGroupsRequest): Promise<readonly DescribeGroupsGroup[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeGroups)
+      try {
+        const responseReader = await conn.send(ApiKey.DescribeGroups, apiVersion, (writer) => {
+          encodeDescribeGroupsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDescribeGroupsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe groups response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.groups
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * List all consumer groups known to the broker.
+   *
+   * @param request - The ListGroups request payload. Pass `{}` for no filter.
+   * @returns Listed groups.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async listGroups(request: ListGroupsRequest = {}): Promise<readonly ListGroupsGroup[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.ListGroups)
+      try {
+        const responseReader = await conn.send(ApiKey.ListGroups, apiVersion, (writer) => {
+          encodeListGroupsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeListGroupsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode list groups response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        if (result.value.errorCode !== 0) {
+          throw new KafkaConnectionError(
+            `list groups request failed with error code ${String(result.value.errorCode)}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.groups
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Delete one or more consumer groups.
+   *
+   * Groups must be empty (no active members) to be deleted.
+   *
+   * @param request - The DeleteGroups request payload.
+   * @returns Per-group deletion results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async deleteGroups(request: DeleteGroupsRequest): Promise<readonly DeleteGroupsResult[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DeleteGroups)
+      try {
+        const responseReader = await conn.send(ApiKey.DeleteGroups, apiVersion, (writer) => {
+          encodeDeleteGroupsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDeleteGroupsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode delete groups response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.results
       } finally {
         this.pool.releaseConnection(conn)
       }

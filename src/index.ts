@@ -530,3 +530,40 @@ export {
   decodeTxnOffsetCommitResponse,
   encodeTxnOffsetCommitRequest
 } from "./protocol/txn-offset-commit.js"
+
+// DescribeGroups API
+export type {
+  DescribeGroupsGroup,
+  DescribeGroupsMember,
+  DescribeGroupsRequest,
+  DescribeGroupsResponse
+} from "./protocol/describe-groups.js"
+export {
+  buildDescribeGroupsRequest,
+  decodeDescribeGroupsResponse,
+  encodeDescribeGroupsRequest
+} from "./protocol/describe-groups.js"
+
+// ListGroups API
+export type {
+  ListGroupsGroup,
+  ListGroupsRequest,
+  ListGroupsResponse
+} from "./protocol/list-groups.js"
+export {
+  buildListGroupsRequest,
+  decodeListGroupsResponse,
+  encodeListGroupsRequest
+} from "./protocol/list-groups.js"
+
+// DeleteGroups API
+export type {
+  DeleteGroupsRequest,
+  DeleteGroupsResponse,
+  DeleteGroupsResult
+} from "./protocol/delete-groups.js"
+export {
+  buildDeleteGroupsRequest,
+  decodeDeleteGroupsResponse,
+  encodeDeleteGroupsRequest
+} from "./protocol/delete-groups.js"

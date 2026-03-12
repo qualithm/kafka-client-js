@@ -126,7 +126,10 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.AddPartitionsToTxn]: { minVersion: 0, maxVersion: 3 },
   [ApiKey.AddOffsetsToTxn]: { minVersion: 0, maxVersion: 3 },
   [ApiKey.EndTxn]: { minVersion: 0, maxVersion: 3 },
-  [ApiKey.TxnOffsetCommit]: { minVersion: 0, maxVersion: 3 }
+  [ApiKey.TxnOffsetCommit]: { minVersion: 0, maxVersion: 3 },
+  [ApiKey.DescribeGroups]: { minVersion: 0, maxVersion: 5 },
+  [ApiKey.ListGroups]: { minVersion: 0, maxVersion: 4 },
+  [ApiKey.DeleteGroups]: { minVersion: 0, maxVersion: 2 }
 }
 
 /**
@@ -159,7 +162,10 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.AddPartitionsToTxn]: 3,
   [ApiKey.AddOffsetsToTxn]: 3,
   [ApiKey.EndTxn]: 3,
-  [ApiKey.TxnOffsetCommit]: 3
+  [ApiKey.TxnOffsetCommit]: 3,
+  [ApiKey.DescribeGroups]: 5,
+  [ApiKey.ListGroups]: 3,
+  [ApiKey.DeleteGroups]: 2
 }
 
 /**
