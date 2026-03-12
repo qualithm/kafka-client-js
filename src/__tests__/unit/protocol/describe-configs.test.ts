@@ -340,6 +340,7 @@ describe("decodeDescribeConfigsResponse", () => {
       writer.writeInt8(5) // DEFAULT
       writer.writeBoolean(false) // is_sensitive
       writer.writeInt32(0) // synonyms (empty)
+      writer.writeInt8(2) // config_type (STRING)
       writer.writeString("Specify the final compression type for a given topic.")
 
       const reader = new BinaryReader(writer.finish())
@@ -374,6 +375,8 @@ describe("decodeDescribeConfigsResponse", () => {
       writer.writeBoolean(false) // is_sensitive
       // synonyms (compact: 0+1 = 1, empty)
       writer.writeUnsignedVarInt(1)
+      // config_type (STRING)
+      writer.writeInt8(2)
       // documentation
       writer.writeCompactString("hours to keep a log")
       // config tagged fields

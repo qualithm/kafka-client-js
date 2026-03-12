@@ -1722,8 +1722,9 @@ function isRetriableProduceError(errorCode: number): boolean {
  */
 function isRetriableInitProducerIdError(errorCode: number): boolean {
   switch (errorCode) {
-    case 14: // COORDINATOR_NOT_AVAILABLE
-    case 15: // NOT_COORDINATOR
+    case 14: // COORDINATOR_LOAD_IN_PROGRESS
+    case 15: // COORDINATOR_NOT_AVAILABLE
+    case 16: // NOT_COORDINATOR
       return true
     default:
       return false
@@ -1748,8 +1749,9 @@ function isRetriableMetadataError(errorCode: number): boolean {
  */
 function isRetriableTransactionError(errorCode: number): boolean {
   switch (errorCode) {
-    case 14: // COORDINATOR_NOT_AVAILABLE
-    case 15: // NOT_COORDINATOR
+    case 14: // COORDINATOR_LOAD_IN_PROGRESS
+    case 15: // COORDINATOR_NOT_AVAILABLE
+    case 16: // NOT_COORDINATOR
     case 51: // CONCURRENT_TRANSACTIONS
       return true
     default:
@@ -1762,8 +1764,9 @@ function isRetriableTransactionError(errorCode: number): boolean {
  */
 function isRetriableCoordinatorError(errorCode: number): boolean {
   switch (errorCode) {
-    case 14: // COORDINATOR_NOT_AVAILABLE
-    case 15: // NOT_COORDINATOR
+    case 14: // COORDINATOR_LOAD_IN_PROGRESS
+    case 15: // COORDINATOR_NOT_AVAILABLE
+    case 16: // NOT_COORDINATOR
       return true
     default:
       return false

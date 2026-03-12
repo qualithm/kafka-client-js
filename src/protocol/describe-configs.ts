@@ -121,6 +121,8 @@ export type DescribeConfigsEntry = {
   readonly configSource: number
   /** Config synonyms (v1+). */
   readonly synonyms: readonly ConfigSynonym[]
+  /** Config data type (v3+). 1=BOOLEAN, 2=STRING, 3=INT, 4=SHORT, 5=LONG, 6=DOUBLE, 7=LIST, 8=CLASS, 9=PASSWORD. */
+  readonly configType: number
   /** Config documentation (v3+). */
   readonly documentation: string | null
   /** Tagged fields (v4+). */
@@ -463,6 +465,16 @@ function decodeDescribeConfigsEntry(
   }
   const synonyms = synonymsResult.value
 
+  // config_type (v3+)
+  let configType = 0
+  if (apiVersion >= 3) {
+    const typeResult = reader.readInt8()
+    if (!typeResult.ok) {
+      return typeResult
+    }
+    configType = typeResult.value
+  }
+
   // config_documentation (v3+)
   let documentation: string | null = null
   if (apiVersion >= 3) {
@@ -492,6 +504,7 @@ function decodeDescribeConfigsEntry(
       isSensitive: sensitiveResult.value,
       configSource,
       synonyms,
+      configType,
       documentation,
       taggedFields
     },

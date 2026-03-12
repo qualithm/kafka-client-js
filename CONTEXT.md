@@ -390,6 +390,124 @@ stop-the-world.
 Acceptance: Clients can opt in to automatic reconnection with configurable backoff; disabled by
 default per Locked Decision #9.
 
+### Integration Tests
+
+- [x] End-to-end produce/consume test against KRaft broker (docker-compose)
+- [ ] SASL/PLAIN and SASL/SCRAM authentication integration tests
+- [x] Consumer group rebalance integration test (multiple consumers)
+- [x] Transactional produce with commit/abort integration test
+- [x] Admin client operations integration test (create/delete topics, describe/alter configs)
+- [x] Idempotent producer duplicate suppression integration test
+
+Acceptance: Integration tests exercise real protocol codecs (writer callbacks), pass against
+docker-compose KRaft broker, cover producer/consumer/admin/auth paths. Function coverage exceeds
+90%.
+
+### Group Management APIs
+
+- [ ] DescribeGroups request/response codec (API key 15, v0–v5)
+- [ ] ListGroups request/response codec (API key 16, v0–v4)
+- [ ] DeleteGroups request/response codec (API key 42, v0–v2)
+- [ ] Add `describeGroups()`, `listGroups()`, `deleteGroups()` to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client can list/describe/delete consumer groups.
+
+### Record & Offset Management APIs
+
+- [ ] DeleteRecords request/response codec (API key 21, v0–v2)
+- [ ] OffsetForLeaderEpoch request/response codec (API key 23, v0–v4)
+- [ ] Add `deleteRecords()` to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client can truncate topic data.
+
+### Admin Operations APIs
+
+- [ ] ElectLeaders request/response codec (API key 43, v0–v2)
+- [ ] IncrementalAlterConfigs request/response codec (API key 44, v0–v1)
+- [ ] AlterPartitionReassignments request/response codec (API key 45, v0–v0)
+- [ ] ListPartitionReassignments request/response codec (API key 46, v0–v0)
+- [ ] Add `electLeaders()`, `incrementalAlterConfigs()`, `alterPartitionReassignments()`,
+      `listPartitionReassignments()` to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client supports preferred leader election,
+incremental config updates, and partition reassignment.
+
+### ACL Management APIs
+
+- [ ] DescribeAcls request/response codec (API key 29, v0–v3)
+- [ ] CreateAcls request/response codec (API key 30, v0–v3)
+- [ ] DeleteAcls request/response codec (API key 31, v0–v3)
+- [ ] Add `describeAcls()`, `createAcls()`, `deleteAcls()` to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client can manage ACL rules.
+
+### Delegation Token APIs
+
+- [ ] CreateDelegationToken request/response codec (API key 38, v0–v3)
+- [ ] RenewDelegationToken request/response codec (API key 39, v0–v2)
+- [ ] ExpireDelegationToken request/response codec (API key 40, v0–v2)
+- [ ] DescribeDelegationToken request/response codec (API key 41, v0–v3)
+- [ ] Add delegation token methods to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client supports token lifecycle management.
+
+### SCRAM Credential APIs
+
+- [ ] DescribeUserScramCredentials request/response codec (API key 50, v0–v0)
+- [ ] AlterUserScramCredentials request/response codec (API key 51, v0–v0)
+- [ ] Add SCRAM credential methods to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client can manage SCRAM users.
+
+### Client Quota APIs
+
+- [ ] DescribeClientQuotas request/response codec (API key 48, v0–v1)
+- [ ] AlterClientQuotas request/response codec (API key 49, v0–v1)
+- [ ] Add quota methods to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client can inspect and set client quotas.
+
+### Log Dir APIs
+
+- [ ] DescribeLogDirs request/response codec (API key 35, v0–v4)
+- [ ] AlterReplicaLogDirs request/response codec (API key 34, v0–v2)
+- [ ] Add log dir methods to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client can query and manage broker log directories.
+
+### Kafka 4.x Discovery & Introspection APIs
+
+- [ ] DescribeCluster request/response codec (API key 60, v0–v1)
+- [ ] DescribeProducers request/response codec (API key 61, v0–v0)
+- [ ] DescribeTransactions request/response codec (API key 65, v0–v0)
+- [ ] ListTransactions request/response codec (API key 66, v0–v0)
+- [ ] DescribeTopicPartitions request/response codec (API key 75, v0–v0)
+- [ ] UpdateFeatures request/response codec (API key 57, v0–v1)
+- [ ] DescribeQuorum request/response codec (API key 55, v0–v1)
+- [ ] Add discovery and introspection methods to `KafkaAdmin`
+
+Acceptance: Codecs round-trip correctly, admin client supports modern cluster discovery and
+transaction/producer introspection compatible with Kafka 4.2.
+
+### KIP-848 Consumer Group Protocol
+
+- [ ] ConsumerGroupHeartbeat request/response codec (API key 68, v0–v0)
+- [ ] ConsumerGroupDescribe request/response codec (API key 69, v0–v0)
+- [ ] Server-side assignor support in consumer (new group protocol)
+- [ ] Backward compatibility with classic group protocol
+
+Acceptance: Consumer can join groups using the new KIP-848 protocol against Kafka 4.2 brokers, falls
+back to classic protocol for older brokers.
+
+### Client Telemetry APIs
+
+- [ ] GetTelemetrySubscriptions request/response codec (API key 71, v0–v0)
+- [ ] PushTelemetry request/response codec (API key 72, v0–v0)
+- [ ] Opt-in telemetry reporting from producer/consumer
+
+Acceptance: Codecs round-trip correctly, clients can opt in to push metrics to brokers supporting
+KIP-714.
+
 ---
 
 ## Learnings
@@ -407,3 +525,6 @@ default per Locked Decision #9.
 | 2026-03-11 | Kafka transaction protocol flow: FindCoordinator(TRANSACTION) → InitProducerId → beginTransaction (client-only) → AddPartitionsToTxn (per new topic-partition) → Produce → EndTxn (commit/abort); for consumer offset commit within transaction, also AddOffsetsToTxn → TxnOffsetCommit |
 | 2026-03-11 | Kafka `FLEXIBLE_VERSION_THRESHOLDS` control header encoding, but individual response decoders may switch body format at a different version (e.g. FindCoordinator headers are flexible at v3 but batched response format starts at v4); tests must match the body format version        |
 | 2026-03-12 | Mock-based unit tests for producer/consumer/admin achieve ~80% function coverage because `conn.send(apiKey, version, (writer) => { ... })` writer callbacks are never invoked by the mock; these callbacks are only exercisable via integration tests with a real broker                |
+| 2026-03-12 | Single-broker Kafka docker-compose requires `KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1` and `KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1`; defaults of 3/2 cause `__transaction_state` topic creation to fail with `INVALID_REPLICATION_FACTOR`                                        |
+| 2026-03-12 | DescribeConfigs v3+ added a `config_type` (INT8) field between `synonyms` and `documentation` in each config entry; omitting it shifts the decoder and corrupts all subsequent fields                                                                                                   |
+| 2026-03-12 | `ConnectionPool` with `maxConnectionsPerBroker=1` (default) deadlocks when two consumers from the same `Kafka` instance join the same group: consumer2's JoinGroup holds the connection, consumer1 can't send its JoinGroup, broker blocks until all members rejoin                     |
