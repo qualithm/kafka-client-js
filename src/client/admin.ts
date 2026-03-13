@@ -31,6 +31,12 @@ import {
   encodeCreateAclsRequest
 } from "../protocol/create-acls.js"
 import {
+  type CreateDelegationTokenRequest,
+  type CreateDelegationTokenResponse,
+  decodeCreateDelegationTokenResponse,
+  encodeCreateDelegationTokenRequest
+} from "../protocol/create-delegation-token.js"
+import {
   type CreatePartitionsRequest,
   type CreatePartitionsTopicResponse,
   decodeCreatePartitionsResponse,
@@ -79,6 +85,12 @@ import {
   encodeDescribeConfigsRequest
 } from "../protocol/describe-configs.js"
 import {
+  decodeDescribeDelegationTokenResponse,
+  type DescribedDelegationToken,
+  type DescribeDelegationTokenRequest,
+  encodeDescribeDelegationTokenRequest
+} from "../protocol/describe-delegation-token.js"
+import {
   decodeDescribeGroupsResponse,
   type DescribeGroupsGroup,
   type DescribeGroupsRequest,
@@ -90,6 +102,12 @@ import {
   type ElectLeadersTopicResponse,
   encodeElectLeadersRequest
 } from "../protocol/elect-leaders.js"
+import {
+  decodeExpireDelegationTokenResponse,
+  encodeExpireDelegationTokenRequest,
+  type ExpireDelegationTokenRequest,
+  type ExpireDelegationTokenResponse
+} from "../protocol/expire-delegation-token.js"
 import {
   decodeIncrementalAlterConfigsResponse,
   encodeIncrementalAlterConfigsRequest,
@@ -114,6 +132,12 @@ import {
   type MetadataRequest,
   type MetadataTopic
 } from "../protocol/metadata.js"
+import {
+  decodeRenewDelegationTokenResponse,
+  encodeRenewDelegationTokenRequest,
+  type RenewDelegationTokenRequest,
+  type RenewDelegationTokenResponse
+} from "../protocol/renew-delegation-token.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -804,6 +828,163 @@ export class KafkaAdmin {
         }
 
         return result.value.filterResults
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Create a new delegation token.
+   *
+   * Delegation tokens enable lightweight authentication for Kafka clients
+   * without requiring each client to have Kerberos credentials or TLS
+   * certificates.
+   *
+   * @param request - The CreateDelegationToken request payload.
+   * @returns The created token details including HMAC and timestamps.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async createDelegationToken(
+    request: CreateDelegationTokenRequest
+  ): Promise<CreateDelegationTokenResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(ApiKey.CreateDelegationToken)
+      try {
+        const responseReader = await conn.send(
+          ApiKey.CreateDelegationToken,
+          apiVersion,
+          (writer) => {
+            encodeCreateDelegationTokenRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeCreateDelegationTokenResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode create delegation token response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Renew an existing delegation token.
+   *
+   * Extends the expiry time of the token. The caller must be a permitted
+   * renewer of the token.
+   *
+   * @param request - The RenewDelegationToken request payload.
+   * @returns The renewed token response including the new expiry timestamp.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async renewDelegationToken(
+    request: RenewDelegationTokenRequest
+  ): Promise<RenewDelegationTokenResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.RenewDelegationToken)
+      try {
+        const responseReader = await conn.send(
+          ApiKey.RenewDelegationToken,
+          apiVersion,
+          (writer) => {
+            encodeRenewDelegationTokenRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeRenewDelegationTokenResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode renew delegation token response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Expire a delegation token.
+   *
+   * Changes the expiry time of the token. Use a negative
+   * `expiryTimePeriodMs` to expire the token immediately.
+   *
+   * @param request - The ExpireDelegationToken request payload.
+   * @returns The expiry response including the final expiry timestamp.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async expireDelegationToken(
+    request: ExpireDelegationTokenRequest
+  ): Promise<ExpireDelegationTokenResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(ApiKey.ExpireDelegationToken)
+      try {
+        const responseReader = await conn.send(
+          ApiKey.ExpireDelegationToken,
+          apiVersion,
+          (writer) => {
+            encodeExpireDelegationTokenRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeExpireDelegationTokenResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode expire delegation token response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe delegation tokens.
+   *
+   * Returns delegation tokens matching the specified owner principals.
+   * Pass `null` owners to describe all tokens the requester can see.
+   *
+   * @param request - The DescribeDelegationToken request payload.
+   * @returns The described delegation tokens.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeDelegationTokens(
+    request: DescribeDelegationTokenRequest
+  ): Promise<readonly DescribedDelegationToken[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeDelegationToken)
+      try {
+        const responseReader = await conn.send(
+          ApiKey.DescribeDelegationToken,
+          apiVersion,
+          (writer) => {
+            encodeDescribeDelegationTokenRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeDescribeDelegationTokenResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe delegation token response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.tokens
       } finally {
         this.pool.releaseConnection(conn)
       }

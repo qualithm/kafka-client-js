@@ -702,3 +702,51 @@ export {
   decodeDeleteAclsResponse,
   encodeDeleteAclsRequest
 } from "./protocol/delete-acls.js"
+
+// CreateDelegationToken API
+export type {
+  CreatableRenewers,
+  CreateDelegationTokenRequest,
+  CreateDelegationTokenResponse
+} from "./protocol/create-delegation-token.js"
+export {
+  buildCreateDelegationTokenRequest,
+  decodeCreateDelegationTokenResponse,
+  encodeCreateDelegationTokenRequest
+} from "./protocol/create-delegation-token.js"
+
+// RenewDelegationToken API
+export type {
+  RenewDelegationTokenRequest,
+  RenewDelegationTokenResponse
+} from "./protocol/renew-delegation-token.js"
+export {
+  buildRenewDelegationTokenRequest,
+  decodeRenewDelegationTokenResponse,
+  encodeRenewDelegationTokenRequest
+} from "./protocol/renew-delegation-token.js"
+
+// ExpireDelegationToken API
+export type {
+  ExpireDelegationTokenRequest,
+  ExpireDelegationTokenResponse
+} from "./protocol/expire-delegation-token.js"
+export {
+  buildExpireDelegationTokenRequest,
+  decodeExpireDelegationTokenResponse,
+  encodeExpireDelegationTokenRequest
+} from "./protocol/expire-delegation-token.js"
+
+// DescribeDelegationToken API
+export type {
+  DescribedDelegationToken,
+  DescribeDelegationTokenOwner,
+  DescribeDelegationTokenRequest,
+  DescribeDelegationTokenResponse,
+  DescribedTokenRenewer
+} from "./protocol/describe-delegation-token.js"
+export {
+  buildDescribeDelegationTokenRequest,
+  decodeDescribeDelegationTokenResponse,
+  encodeDescribeDelegationTokenRequest
+} from "./protocol/describe-delegation-token.js"
