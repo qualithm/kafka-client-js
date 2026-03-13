@@ -992,3 +992,11 @@ export {
   decodePushTelemetryResponse,
   encodePushTelemetryRequest
 } from "./protocol/push-telemetry.js"
+
+// Client Telemetry Reporter (KIP-714)
+export type {
+  MetricsCollector,
+  TelemetryConfig,
+  TelemetrySubscription
+} from "./client/telemetry.js"
+export { TelemetryReporter } from "./client/telemetry.js"

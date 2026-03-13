@@ -57,6 +57,7 @@ import {
   decodeTxnOffsetCommitResponse,
   encodeTxnOffsetCommitRequest
 } from "../protocol/txn-offset-commit.js"
+import { type TelemetryConfig, TelemetryReporter } from "./telemetry.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -180,6 +181,11 @@ export type ProducerOptions = {
    * Retry configuration for retriable errors.
    */
   readonly retry?: RetryConfig
+  /**
+   * Opt-in telemetry configuration (KIP-714).
+   * When provided, the producer periodically pushes client metrics to the broker.
+   */
+  readonly telemetry?: TelemetryConfig
 }
 
 /**
@@ -388,6 +394,7 @@ export class KafkaProducer {
   private readonly pendingEnqueues = new Set<Promise<void>>()
   private lingerTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
+  private readonly telemetryReporter: TelemetryReporter | null
 
   // Idempotent producer state
   private producerId = -1n
@@ -415,6 +422,9 @@ export class KafkaProducer {
     this.initialRetryMs = options.retry?.initialRetryMs ?? 100
     this.maxRetryMs = options.retry?.maxRetryMs ?? 30_000
     this.retryMultiplier = options.retry?.multiplier ?? 2
+    this.telemetryReporter = options.telemetry
+      ? new TelemetryReporter(options.connectionPool, options.telemetry)
+      : null
   }
 
   /**
@@ -442,9 +452,13 @@ export class KafkaProducer {
     }
 
     if (this.lingerMs <= 0) {
+      await this.ensureTelemetry()
       await this.ensureProducerId()
       return this.withRetry(topic, async () => this.sendImmediate(topic, messages))
     }
+
+    // Start telemetry in the background for the linger path (non-blocking)
+    void this.ensureTelemetry()
 
     return this.enqueueMessages(topic, messages)
   }
@@ -522,6 +536,13 @@ export class KafkaProducer {
       }
     } finally {
       this.clearLingerTimer()
+      if (this.telemetryReporter) {
+        try {
+          await this.telemetryReporter.stop()
+        } catch {
+          // best-effort telemetry shutdown
+        }
+      }
       this.closed = true
       this.topicMetadataCache.clear()
       this.sequenceNumbers.clear()
@@ -1397,6 +1418,20 @@ export class KafkaProducer {
           d.reject(error instanceof Error ? error : new Error(String(error)))
         }
       }
+    }
+  }
+
+  private telemetryStarted = false
+
+  private async ensureTelemetry(): Promise<void> {
+    if (this.telemetryStarted || !this.telemetryReporter) {
+      return
+    }
+    this.telemetryStarted = true
+    try {
+      await this.telemetryReporter.start()
+    } catch {
+      // telemetry is best-effort; do not block produce
     }
   }
 

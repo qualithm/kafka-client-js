@@ -36,6 +36,7 @@ import {
   type ProducerOptions,
   type RetryConfig
 } from "./producer.js"
+import type { TelemetryConfig } from "./telemetry.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -137,6 +138,11 @@ export type KafkaConsumerOptions = {
    * Only used when `groupProtocol` is `"consumer"`. Null uses the broker default.
    */
   readonly serverAssignor?: string | null
+  /**
+   * Opt-in telemetry configuration (KIP-714).
+   * When provided, the consumer periodically pushes client metrics to the broker.
+   */
+  readonly telemetry?: TelemetryConfig
 }
 
 /**
@@ -208,6 +214,11 @@ export type KafkaProducerOptions = {
    * Retry configuration for retriable errors.
    */
   readonly retry?: RetryConfig
+  /**
+   * Opt-in telemetry configuration (KIP-714).
+   * When provided, the producer periodically pushes client metrics to the broker.
+   */
+  readonly telemetry?: TelemetryConfig
 }
 
 // ---------------------------------------------------------------------------

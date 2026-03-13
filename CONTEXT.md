@@ -123,6 +123,7 @@ Registry, and Connect framework.
 | `serialization/schema-registry.ts`            | Confluent Schema Registry HTTP client, schema caching by ID and subject, Confluent wire format encode/decode, `SchemaRegistryError`, subject naming strategies (`topicNameStrategy`, `recordNameStrategy`, `topicRecordNameStrategy`)                                                                                                                                                             |
 | `serialization/avro-serializer.ts`            | Avro serializer/deserializer with Schema Registry integration, pluggable `AvroCodec` interface, Confluent wire format, `createAvroSerde<T>()` factory                                                                                                                                                                                                                                             |
 | `serialization/protobuf-serializer.ts`        | Protobuf serializer/deserializer with Schema Registry integration, pluggable `ProtobufCodec` interface, Confluent wire format with message index encoding, `createProtobufSerde<T>()` factory                                                                                                                                                                                                     |
+| `client/telemetry.ts`                         | `TelemetryReporter` class for opt-in KIP-714 client telemetry, `TelemetryConfig`, `MetricsCollector`, `TelemetrySubscription` types, periodic `GetTelemetrySubscriptions` and `PushTelemetry` lifecycle                                                                                                                                                                                           |
 | `testing/index.ts`                            | Testing utilities subpath (`@qualithm/kafka-client/testing`), re-exports codec primitives and protocol framing for building test fixtures                                                                                                                                                                                                                                                         |
 
 ### Features
@@ -532,7 +533,7 @@ back to classic protocol for older brokers.
 
 - [x] GetTelemetrySubscriptions request/response codec (API key 71, v0–v0)
 - [x] PushTelemetry request/response codec (API key 72, v0–v0)
-- [ ] Opt-in telemetry reporting from producer/consumer
+- [x] Opt-in telemetry reporting from producer/consumer
 
 Acceptance: Codecs round-trip correctly, clients can opt in to push metrics to brokers supporting
 KIP-714.

@@ -84,6 +84,7 @@ import {
   type SyncGroupRequest
 } from "../protocol/sync-group.js"
 import { type PartitionAssignor, rangeAssignor } from "./assignors.js"
+import { type TelemetryConfig, TelemetryReporter } from "./telemetry.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,6 +187,11 @@ export type ConsumerOptions = {
    * Only used when `groupProtocol` is `"consumer"`. Null uses the broker default.
    */
   readonly serverAssignor?: string | null
+  /**
+   * Opt-in telemetry configuration (KIP-714).
+   * When provided, the consumer periodically pushes client metrics to the broker.
+   */
+  readonly telemetry?: TelemetryConfig
 }
 
 /**
@@ -418,6 +424,9 @@ export class KafkaConsumer {
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null
   private autoCommitTimer: ReturnType<typeof setTimeout> | null = null
 
+  // Telemetry
+  private readonly telemetryReporter: TelemetryReporter | null
+
   constructor(options: ConsumerOptions) {
     this.pool = options.connectionPool
     this.groupId = options.groupId
@@ -438,6 +447,9 @@ export class KafkaConsumer {
     this.groupProtocol = options.groupProtocol ?? GroupProtocol.Classic
     this.serverAssignor = options.serverAssignor ?? null
     this.initRetryOptions(options.retry)
+    this.telemetryReporter = options.telemetry
+      ? new TelemetryReporter(options.connectionPool, options.telemetry)
+      : null
   }
 
   private initRetryOptions(retry?: {
@@ -480,6 +492,14 @@ export class KafkaConsumer {
     }
 
     await this.joinGroupWithRetry()
+
+    if (this.telemetryReporter) {
+      try {
+        await this.telemetryReporter.start()
+      } catch {
+        // telemetry is best-effort; do not block consumer startup
+      }
+    }
   }
 
   /**
@@ -554,6 +574,14 @@ export class KafkaConsumer {
 
     this.stopHeartbeat()
     this.stopAutoCommit()
+
+    if (this.telemetryReporter) {
+      try {
+        await this.telemetryReporter.stop()
+      } catch {
+        // best-effort telemetry shutdown
+      }
+    }
 
     try {
       if (this.autoCommit && this.joined) {
