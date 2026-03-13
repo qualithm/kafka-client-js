@@ -25,6 +25,12 @@ import {
 } from "../protocol/alter-partition-reassignments.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "../protocol/api-versions.js"
 import {
+  type AclCreationResult,
+  type CreateAclsRequest,
+  decodeCreateAclsResponse,
+  encodeCreateAclsRequest
+} from "../protocol/create-acls.js"
+import {
   type CreatePartitionsRequest,
   type CreatePartitionsTopicResponse,
   decodeCreatePartitionsResponse,
@@ -36,6 +42,12 @@ import {
   decodeCreateTopicsResponse,
   encodeCreateTopicsRequest
 } from "../protocol/create-topics.js"
+import {
+  decodeDeleteAclsResponse,
+  type DeleteAclsFilter,
+  type DeleteAclsFilterResult,
+  encodeDeleteAclsRequest
+} from "../protocol/delete-acls.js"
 import {
   decodeDeleteGroupsResponse,
   type DeleteGroupsRequest,
@@ -54,6 +66,12 @@ import {
   type DeleteTopicsTopicResponse,
   encodeDeleteTopicsRequest
 } from "../protocol/delete-topics.js"
+import {
+  decodeDescribeAclsResponse,
+  type DescribeAclsRequest,
+  type DescribeAclsResource,
+  encodeDescribeAclsRequest
+} from "../protocol/describe-acls.js"
 import {
   decodeDescribeConfigsResponse,
   type DescribeConfigsRequest,
@@ -694,6 +712,98 @@ export class KafkaAdmin {
         }
 
         return result.value.topics
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe ACL bindings matching the specified filter.
+   *
+   * @param request - The DescribeAcls request payload (filter criteria).
+   * @returns ACL resources matching the filter.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeAcls(request: DescribeAclsRequest): Promise<readonly DescribeAclsResource[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeAcls)
+      try {
+        const responseReader = await conn.send(ApiKey.DescribeAcls, apiVersion, (writer) => {
+          encodeDescribeAclsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDescribeAclsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe acls response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.resources
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Create one or more ACL bindings.
+   *
+   * @param request - The CreateAcls request payload.
+   * @returns Per-creation results with error codes.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async createAcls(request: CreateAclsRequest): Promise<readonly AclCreationResult[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(ApiKey.CreateAcls)
+      try {
+        const responseReader = await conn.send(ApiKey.CreateAcls, apiVersion, (writer) => {
+          encodeCreateAclsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeCreateAclsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode create acls response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.results
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Delete ACL bindings matching the specified filters.
+   *
+   * @param filters - ACL deletion filters. Each filter matches and deletes ACL bindings.
+   * @returns Per-filter results with matching deleted ACLs.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async deleteAcls(
+    filters: readonly DeleteAclsFilter[]
+  ): Promise<readonly DeleteAclsFilterResult[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(ApiKey.DeleteAcls)
+      try {
+        const responseReader = await conn.send(ApiKey.DeleteAcls, apiVersion, (writer) => {
+          encodeDeleteAclsRequest(writer, { filters }, apiVersion)
+        })
+
+        const result = decodeDeleteAclsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode delete acls response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.filterResults
       } finally {
         this.pool.releaseConnection(conn)
       }

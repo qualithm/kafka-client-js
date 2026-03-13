@@ -658,3 +658,47 @@ export {
   decodeListPartitionReassignmentsResponse,
   encodeListPartitionReassignmentsRequest
 } from "./protocol/list-partition-reassignments.js"
+
+// DescribeAcls API
+export type {
+  AclDescription,
+  DescribeAclsRequest,
+  DescribeAclsResource,
+  DescribeAclsResponse
+} from "./protocol/describe-acls.js"
+export {
+  AclOperation,
+  AclPermissionType,
+  AclResourcePatternType,
+  AclResourceType,
+  buildDescribeAclsRequest,
+  decodeDescribeAclsResponse,
+  encodeDescribeAclsRequest
+} from "./protocol/describe-acls.js"
+
+// CreateAcls API
+export type {
+  AclCreation,
+  AclCreationResult,
+  CreateAclsRequest,
+  CreateAclsResponse
+} from "./protocol/create-acls.js"
+export {
+  buildCreateAclsRequest,
+  decodeCreateAclsResponse,
+  encodeCreateAclsRequest
+} from "./protocol/create-acls.js"
+
+// DeleteAcls API
+export type {
+  DeleteAclsFilter,
+  DeleteAclsFilterResult,
+  DeleteAclsMatchingAcl,
+  DeleteAclsRequest,
+  DeleteAclsResponse
+} from "./protocol/delete-acls.js"
+export {
+  buildDeleteAclsRequest,
+  decodeDeleteAclsResponse,
+  encodeDeleteAclsRequest
+} from "./protocol/delete-acls.js"
