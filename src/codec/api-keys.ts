@@ -145,6 +145,8 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.IncrementalAlterConfigs]: { minVersion: 0, maxVersion: 1 },
   [ApiKey.AlterPartitionReassignments]: { minVersion: 0, maxVersion: 0 },
   [ApiKey.ListPartitionReassignments]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.DescribeClientQuotas]: { minVersion: 0, maxVersion: 1 },
+  [ApiKey.AlterClientQuotas]: { minVersion: 0, maxVersion: 1 },
   [ApiKey.DescribeUserScramCredentials]: { minVersion: 0, maxVersion: 0 },
   [ApiKey.AlterUserScramCredentials]: { minVersion: 0, maxVersion: 0 }
 }
@@ -196,6 +198,8 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.IncrementalAlterConfigs]: 1,
   [ApiKey.AlterPartitionReassignments]: 0,
   [ApiKey.ListPartitionReassignments]: 0,
+  [ApiKey.DescribeClientQuotas]: 1,
+  [ApiKey.AlterClientQuotas]: 1,
   [ApiKey.DescribeUserScramCredentials]: 0,
   [ApiKey.AlterUserScramCredentials]: 0
 }

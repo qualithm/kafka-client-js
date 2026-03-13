@@ -12,6 +12,12 @@ import { KafkaConnectionError, KafkaError } from "../errors.js"
 import type { ConnectionPool } from "../network/broker-pool.js"
 import type { KafkaConnection } from "../network/connection.js"
 import {
+  type AlterClientQuotasEntryResponse,
+  type AlterClientQuotasRequest,
+  decodeAlterClientQuotasResponse,
+  encodeAlterClientQuotasRequest
+} from "../protocol/alter-client-quotas.js"
+import {
   type AlterConfigsRequest,
   type AlterConfigsResourceResponse,
   decodeAlterConfigsResponse,
@@ -84,6 +90,12 @@ import {
   type DescribeAclsResource,
   encodeDescribeAclsRequest
 } from "../protocol/describe-acls.js"
+import {
+  decodeDescribeClientQuotasResponse,
+  type DescribeClientQuotasEntry,
+  type DescribeClientQuotasRequest,
+  encodeDescribeClientQuotasRequest
+} from "../protocol/describe-client-quotas.js"
 import {
   decodeDescribeConfigsResponse,
   type DescribeConfigsRequest,
@@ -1079,6 +1091,79 @@ export class KafkaAdmin {
         }
 
         return result.value.results
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe client quotas matching the given entity filters.
+   *
+   * Returns quota configuration entries for entities matching all the
+   * specified component filters.
+   *
+   * @param request - The DescribeClientQuotas request payload.
+   * @returns The matching quota entries, or an empty array if none match.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeClientQuotas(
+    request: DescribeClientQuotasRequest
+  ): Promise<readonly DescribeClientQuotasEntry[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeClientQuotas)
+      try {
+        const responseReader = await conn.send(
+          ApiKey.DescribeClientQuotas,
+          apiVersion,
+          (writer) => {
+            encodeDescribeClientQuotasRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeDescribeClientQuotasResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe client quotas response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.entries ?? []
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Alter client quotas for the specified entities.
+   *
+   * Sets or removes quota configuration keys for the given entity targets.
+   *
+   * @param request - The AlterClientQuotas request payload.
+   * @returns The per-entity alteration results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async alterClientQuotas(
+    request: AlterClientQuotasRequest
+  ): Promise<readonly AlterClientQuotasEntryResponse[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(ApiKey.AlterClientQuotas)
+      try {
+        const responseReader = await conn.send(ApiKey.AlterClientQuotas, apiVersion, (writer) => {
+          encodeAlterClientQuotasRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeAlterClientQuotasResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode alter client quotas response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.entries
       } finally {
         this.pool.releaseConnection(conn)
       }

@@ -779,3 +779,35 @@ export {
   decodeAlterUserScramCredentialsResponse,
   encodeAlterUserScramCredentialsRequest
 } from "./protocol/alter-user-scram-credentials.js"
+
+// DescribeClientQuotas API
+export type {
+  DescribeClientQuotasComponent,
+  DescribeClientQuotasEntry,
+  DescribeClientQuotasRequest,
+  DescribeClientQuotasResponse,
+  QuotaEntity,
+  QuotaValue
+} from "./protocol/describe-client-quotas.js"
+export {
+  buildDescribeClientQuotasRequest,
+  decodeDescribeClientQuotasResponse,
+  encodeDescribeClientQuotasRequest,
+  QuotaMatchType
+} from "./protocol/describe-client-quotas.js"
+
+// AlterClientQuotas API
+export type {
+  AlterClientQuotasEntity,
+  AlterClientQuotasEntry,
+  AlterClientQuotasEntryResponse,
+  AlterClientQuotasOp,
+  AlterClientQuotasRequest,
+  AlterClientQuotasResponse,
+  AlterClientQuotasResponseEntity
+} from "./protocol/alter-client-quotas.js"
+export {
+  buildAlterClientQuotasRequest,
+  decodeAlterClientQuotasResponse,
+  encodeAlterClientQuotasRequest
+} from "./protocol/alter-client-quotas.js"

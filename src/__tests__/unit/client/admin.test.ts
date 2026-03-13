@@ -33,7 +33,9 @@ const STANDARD_APIS = [
   { apiKey: ApiKey.DeleteTopics, minVersion: 0, maxVersion: 0 },
   { apiKey: ApiKey.CreatePartitions, minVersion: 0, maxVersion: 0 },
   { apiKey: ApiKey.DescribeConfigs, minVersion: 0, maxVersion: 0 },
-  { apiKey: ApiKey.AlterConfigs, minVersion: 0, maxVersion: 0 }
+  { apiKey: ApiKey.AlterConfigs, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeClientQuotas, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.AlterClientQuotas, minVersion: 0, maxVersion: 0 }
 ]
 
 const TEST_BROKERS = [{ nodeId: 1, host: "localhost", port: 9092, rack: null }]
@@ -641,6 +643,32 @@ describe("KafkaAdmin", () => {
         "failed to decode metadata response"
       )
     })
+
+    it("throws on describeClientQuotas decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.describeClientQuotas({ components: [], strict: false })).rejects.toThrow(
+        "failed to decode describe client quotas response"
+      )
+    })
+
+    it("throws on alterClientQuotas decode failure", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        new Uint8Array([0x00]) // truncated
+      ])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.alterClientQuotas({ entries: [], validateOnly: false })).rejects.toThrow(
+        "failed to decode alter client quotas response"
+      )
+    })
   })
 
   // -------------------------------------------------------------------------
@@ -725,6 +753,99 @@ describe("KafkaAdmin", () => {
           ]
         })
       ).rejects.toThrow("no brokers available")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeClientQuotas
+  // -------------------------------------------------------------------------
+
+  describe("describeClientQuotas", () => {
+    it("describes client quotas from any broker", async () => {
+      const w = new BinaryWriter()
+      // v0 response: throttle, error_code, error_message, entries
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message
+      w.writeInt32(1) // entries array
+      // entry: entity array
+      w.writeInt32(1)
+      w.writeString("user")
+      w.writeString("alice")
+      // entry: values array
+      w.writeInt32(1)
+      w.writeString("producer_byte_rate")
+      w.writeFloat64(1048576.0)
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeClientQuotas({
+        components: [{ entityType: "user", matchType: 0, match: "alice" }],
+        strict: false
+      })
+
+      expect(result).toHaveLength(1)
+      expect(result[0].entity[0].entityType).toBe("user")
+      expect(result[0].entity[0].entityName).toBe("alice")
+      expect(result[0].values[0].key).toBe("producer_byte_rate")
+      expect(result[0].values[0].value).toBe(1048576.0)
+    })
+
+    it("returns empty array when entries are null", async () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeString(null)
+      w.writeInt32(-1) // null entries
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeClientQuotas({
+        components: [],
+        strict: false
+      })
+
+      expect(result).toEqual([])
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // alterClientQuotas
+  // -------------------------------------------------------------------------
+
+  describe("alterClientQuotas", () => {
+    it("alters client quotas via the controller", async () => {
+      const w = new BinaryWriter()
+      // v0 response: throttle, entries
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt32(1) // entries array
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message
+      w.writeInt32(1) // entity array
+      w.writeString("user")
+      w.writeString("alice")
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.alterClientQuotas({
+        entries: [
+          {
+            entity: [{ entityType: "user", entityName: "alice" }],
+            ops: [{ key: "producer_byte_rate", value: 1048576.0, remove: false }]
+          }
+        ],
+        validateOnly: false
+      })
+
+      expect(result).toHaveLength(1)
+      expect(result[0].errorCode).toBe(0)
+      expect(result[0].entity[0].entityType).toBe("user")
     })
   })
 
