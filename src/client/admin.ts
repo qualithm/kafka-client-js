@@ -23,6 +23,12 @@ import {
   encodeAlterPartitionReassignmentsRequest,
   type ReassignableTopicResponse
 } from "../protocol/alter-partition-reassignments.js"
+import {
+  type AlterUserScramCredentialsRequest,
+  type AlterUserScramCredentialsResultEntry,
+  decodeAlterUserScramCredentialsResponse,
+  encodeAlterUserScramCredentialsRequest
+} from "../protocol/alter-user-scram-credentials.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "../protocol/api-versions.js"
 import {
   type AclCreationResult,
@@ -96,6 +102,12 @@ import {
   type DescribeGroupsRequest,
   encodeDescribeGroupsRequest
 } from "../protocol/describe-groups.js"
+import {
+  decodeDescribeUserScramCredentialsResponse,
+  type DescribeUserScramCredentialsRequest,
+  type DescribeUserScramCredentialsResult,
+  encodeDescribeUserScramCredentialsRequest
+} from "../protocol/describe-user-scram-credentials.js"
 import {
   decodeElectLeadersResponse,
   type ElectLeadersRequest,
@@ -985,6 +997,88 @@ export class KafkaAdmin {
         }
 
         return result.value.tokens
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe SCRAM credentials for users.
+   *
+   * Returns the SCRAM credential information (mechanism and iteration count)
+   * for the specified users, or all users if no filter is given.
+   *
+   * @param request - The DescribeUserScramCredentials request payload.
+   * @returns The per-user SCRAM credential results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeUserScramCredentials(
+    request: DescribeUserScramCredentialsRequest
+  ): Promise<readonly DescribeUserScramCredentialsResult[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(
+        ApiKey.DescribeUserScramCredentials
+      )
+      try {
+        const responseReader = await conn.send(
+          ApiKey.DescribeUserScramCredentials,
+          apiVersion,
+          (writer) => {
+            encodeDescribeUserScramCredentialsRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeDescribeUserScramCredentialsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe user scram credentials response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.results
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Alter SCRAM credentials for users.
+   *
+   * Creates, updates, or deletes SCRAM credentials. Use upsertions to create
+   * or update credentials and deletions to remove them.
+   *
+   * @param request - The AlterUserScramCredentials request payload.
+   * @returns The per-user alteration results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async alterUserScramCredentials(
+    request: AlterUserScramCredentialsRequest
+  ): Promise<readonly AlterUserScramCredentialsResultEntry[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(
+        ApiKey.AlterUserScramCredentials
+      )
+      try {
+        const responseReader = await conn.send(
+          ApiKey.AlterUserScramCredentials,
+          apiVersion,
+          (writer) => {
+            encodeAlterUserScramCredentialsRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeAlterUserScramCredentialsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode alter user scram credentials response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.results
       } finally {
         this.pool.releaseConnection(conn)
       }

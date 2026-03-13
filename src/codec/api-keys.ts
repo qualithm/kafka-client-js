@@ -63,7 +63,9 @@ export const ApiKey = {
   AlterPartitionReassignments: 45,
   ListPartitionReassignments: 46,
   DescribeClientQuotas: 48,
-  AlterClientQuotas: 49
+  AlterClientQuotas: 49,
+  DescribeUserScramCredentials: 50,
+  AlterUserScramCredentials: 51
 } as const
 
 export type ApiKey = (typeof ApiKey)[keyof typeof ApiKey]
@@ -142,7 +144,9 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.ElectLeaders]: { minVersion: 0, maxVersion: 2 },
   [ApiKey.IncrementalAlterConfigs]: { minVersion: 0, maxVersion: 1 },
   [ApiKey.AlterPartitionReassignments]: { minVersion: 0, maxVersion: 0 },
-  [ApiKey.ListPartitionReassignments]: { minVersion: 0, maxVersion: 0 }
+  [ApiKey.ListPartitionReassignments]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.DescribeUserScramCredentials]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.AlterUserScramCredentials]: { minVersion: 0, maxVersion: 0 }
 }
 
 /**
@@ -191,7 +195,9 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.ElectLeaders]: 2,
   [ApiKey.IncrementalAlterConfigs]: 1,
   [ApiKey.AlterPartitionReassignments]: 0,
-  [ApiKey.ListPartitionReassignments]: 0
+  [ApiKey.ListPartitionReassignments]: 0,
+  [ApiKey.DescribeUserScramCredentials]: 0,
+  [ApiKey.AlterUserScramCredentials]: 0
 }
 
 /**

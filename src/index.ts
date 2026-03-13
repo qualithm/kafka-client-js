@@ -750,3 +750,32 @@ export {
   decodeDescribeDelegationTokenResponse,
   encodeDescribeDelegationTokenRequest
 } from "./protocol/describe-delegation-token.js"
+
+// DescribeUserScramCredentials API
+export type {
+  CredentialInfo,
+  DescribeUserScramCredentialsRequest,
+  DescribeUserScramCredentialsResponse,
+  DescribeUserScramCredentialsResult,
+  UserScramCredentialsUser
+} from "./protocol/describe-user-scram-credentials.js"
+export {
+  buildDescribeUserScramCredentialsRequest,
+  decodeDescribeUserScramCredentialsResponse,
+  encodeDescribeUserScramCredentialsRequest,
+  ScramMechanism
+} from "./protocol/describe-user-scram-credentials.js"
+
+// AlterUserScramCredentials API
+export type {
+  AlterUserScramCredentialsRequest,
+  AlterUserScramCredentialsResponse,
+  AlterUserScramCredentialsResultEntry,
+  ScramCredentialDeletion,
+  ScramCredentialUpsertion
+} from "./protocol/alter-user-scram-credentials.js"
+export {
+  buildAlterUserScramCredentialsRequest,
+  decodeAlterUserScramCredentialsResponse,
+  encodeAlterUserScramCredentialsRequest
+} from "./protocol/alter-user-scram-credentials.js"
