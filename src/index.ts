@@ -260,7 +260,12 @@ export type {
   ConsumerRetryConfig,
   RebalanceListener
 } from "./client/consumer.js"
-export { createConsumer, KafkaConsumer, OffsetResetStrategy } from "./client/consumer.js"
+export {
+  createConsumer,
+  GroupProtocol,
+  KafkaConsumer,
+  OffsetResetStrategy
+} from "./client/consumer.js"
 
 // OffsetCommit API
 export type {

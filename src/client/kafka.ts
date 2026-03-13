@@ -24,6 +24,7 @@ import { type AdminOptions, type AdminRetryConfig, KafkaAdmin } from "./admin.js
 import {
   type ConsumerOptions,
   type ConsumerRetryConfig,
+  type GroupProtocol,
   KafkaConsumer,
   type OffsetResetStrategy,
   type RebalanceListener
@@ -124,6 +125,18 @@ export type KafkaConsumerOptions = {
    * Retry configuration.
    */
   readonly retry?: ConsumerRetryConfig
+  /**
+   * Consumer group protocol.
+   * - `"classic"` — JoinGroup/SyncGroup/Heartbeat/LeaveGroup (default)
+   * - `"consumer"` — KIP-848 ConsumerGroupHeartbeat with server-side assignment
+   * @default "classic"
+   */
+  readonly groupProtocol?: GroupProtocol
+  /**
+   * Server-side assignor name for KIP-848 protocol (e.g. "range", "uniform").
+   * Only used when `groupProtocol` is `"consumer"`. Null uses the broker default.
+   */
+  readonly serverAssignor?: string | null
 }
 
 /**

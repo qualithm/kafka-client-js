@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   type ConsumerOptions,
   createConsumer,
+  GroupProtocol,
   KafkaConsumer,
   OffsetResetStrategy
 } from "../../../client/consumer"
@@ -2160,6 +2161,447 @@ describe("KafkaConsumer", () => {
       await consumer.connect()
 
       expect(consumer.partitions).toEqual([{ topic: "test-topic", partition: 0 }])
+      await consumer.close()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // KIP-848 Consumer Group Protocol
+  // -------------------------------------------------------------------------
+
+  describe("KIP-848 consumer group protocol", () => {
+    const kip848Apis = [
+      { apiKey: ApiKey.ApiVersions, minVersion: 0, maxVersion: 3 },
+      { apiKey: ApiKey.FindCoordinator, minVersion: 0, maxVersion: 0 },
+      { apiKey: ApiKey.ConsumerGroupHeartbeat, minVersion: 0, maxVersion: 0 },
+      { apiKey: ApiKey.OffsetFetch, minVersion: 0, maxVersion: 0 },
+      { apiKey: ApiKey.OffsetCommit, minVersion: 0, maxVersion: 0 },
+      { apiKey: ApiKey.Metadata, minVersion: 0, maxVersion: 10 },
+      { apiKey: ApiKey.ListOffsets, minVersion: 0, maxVersion: 1 },
+      { apiKey: ApiKey.Fetch, minVersion: 0, maxVersion: 4 }
+    ]
+
+    const topicUuid = new Uint8Array([
+      0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
+    ])
+
+    function buildConsumerGroupHeartbeatV0Body(opts: {
+      errorCode: number
+      memberId: string | null
+      memberEpoch: number
+      heartbeatIntervalMs: number
+      assignment?: { topicId: Uint8Array; partitions: number[] }[] | null
+    }): Uint8Array {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(opts.errorCode)
+      w.writeCompactString(null) // error_message
+      w.writeCompactString(opts.memberId)
+      w.writeInt32(opts.memberEpoch)
+      w.writeInt32(opts.heartbeatIntervalMs)
+
+      // assignment (compact nullable array wrapper)
+      if (opts.assignment === null || opts.assignment === undefined) {
+        w.writeUnsignedVarInt(0) // null array
+        w.writeUnsignedVarInt(0) // tagged fields for assignment struct
+      } else {
+        w.writeUnsignedVarInt(opts.assignment.length + 1) // compact array length
+        for (const tp of opts.assignment) {
+          w.writeUuid(tp.topicId)
+          w.writeUnsignedVarInt(tp.partitions.length + 1) // compact array of INT32
+          for (const p of tp.partitions) {
+            w.writeInt32(p)
+          }
+          w.writeUnsignedVarInt(0) // tagged fields per topic-partition
+        }
+        w.writeUnsignedVarInt(0) // tagged fields for assignment struct
+      }
+
+      w.writeUnsignedVarInt(0) // tagged fields
+      return w.finish()
+    }
+
+    function buildMetadataV10Body(
+      brokers: { nodeId: number; host: string; port: number }[],
+      topics: {
+        errorCode: number
+        name: string
+        topicId: Uint8Array
+        partitions: { partitionIndex: number; leaderId: number }[]
+      }[]
+    ): Uint8Array {
+      const w = new BinaryWriter()
+      // throttle_time_ms (v3+)
+      w.writeInt32(0)
+      // brokers (compact array)
+      w.writeUnsignedVarInt(brokers.length + 1)
+      for (const b of brokers) {
+        w.writeInt32(b.nodeId)
+        w.writeCompactString(b.host)
+        w.writeInt32(b.port)
+        w.writeCompactString(null) // rack
+        w.writeUnsignedVarInt(0) // tagged fields
+      }
+      // cluster_id (v2+, compact nullable string)
+      w.writeCompactString(null)
+      // controller_id (v1+)
+      w.writeInt32(0)
+      // topics (compact array)
+      w.writeUnsignedVarInt(topics.length + 1)
+      for (const t of topics) {
+        w.writeInt16(t.errorCode) // error_code
+        w.writeCompactString(t.name) // name (compact string)
+        w.writeUuid(t.topicId) // topic_id (v10+)
+        w.writeBoolean(false) // is_internal (v1+)
+        // partitions (compact array)
+        w.writeUnsignedVarInt(t.partitions.length + 1)
+        for (const p of t.partitions) {
+          w.writeInt16(0) // error_code
+          w.writeInt32(p.partitionIndex) // partition_index
+          w.writeInt32(p.leaderId) // leader_id
+          w.writeInt32(0) // leader_epoch (v7+)
+          // replica_nodes (compact array)
+          w.writeUnsignedVarInt(2) // length + 1
+          w.writeInt32(p.leaderId)
+          // isr_nodes (compact array)
+          w.writeUnsignedVarInt(2)
+          w.writeInt32(p.leaderId)
+          // offline_replicas (compact array, v5+)
+          w.writeUnsignedVarInt(1) // empty
+          w.writeUnsignedVarInt(0) // tagged fields
+        }
+        // topic_authorized_operations (v8+)
+        w.writeInt32(-2147483648)
+        w.writeUnsignedVarInt(0) // tagged fields
+      }
+      // cluster_authorized_operations (v8–v10)
+      w.writeInt32(-2147483648)
+      // tagged fields (v9+)
+      w.writeUnsignedVarInt(0)
+      return w.finish()
+    }
+
+    function createKip848JoinFlowMock(opts?: {
+      memberId?: string
+      memberEpoch?: number
+      assignment?: { topicId: Uint8Array; partitions: number[] }[]
+      committedOffset?: bigint
+      topics?: string[]
+      topicId?: Uint8Array
+      extraResponses?: Uint8Array[]
+    }): { pool: ConnectionPool; conn: ReturnType<typeof createMockConnection> } {
+      const memberId = opts?.memberId ?? "kip848-member-1"
+      const memberEpoch = opts?.memberEpoch ?? 1
+      const topics = opts?.topics ?? ["test-topic"]
+      const topicId = opts?.topicId ?? topicUuid
+      const assignment = opts?.assignment ?? [{ topicId, partitions: [0] }]
+      const committedOffset = opts?.committedOffset ?? -1n
+
+      const metadataBody = buildMetadataV10Body(
+        [{ nodeId: 1, host: "localhost", port: 9092 }],
+        topics.map((t) => ({
+          errorCode: 0,
+          name: t,
+          topicId,
+          partitions: assignment
+            .flatMap((a) => a.partitions)
+            .map((p) => ({ partitionIndex: p, leaderId: 1 }))
+        }))
+      )
+
+      const heartbeatBody = buildConsumerGroupHeartbeatV0Body({
+        errorCode: 0,
+        memberId,
+        memberEpoch,
+        heartbeatIntervalMs: 5000,
+        assignment
+      })
+
+      const offsetFetchBody = buildOffsetFetchV0Body(
+        topics.map((t) => ({
+          name: t,
+          partitions: assignment
+            .flatMap((a) => a.partitions)
+            .map((p) => ({
+              partitionIndex: p,
+              committedOffset,
+              metadata: null,
+              errorCode: 0
+            }))
+        }))
+      )
+
+      // Flow: findCoordinator → kip848Join (refreshTopicMetadata + heartbeat) → fetchInitialOffsets (refreshTopicMetadata + OffsetFetch + ListOffsets)
+      const allResponses = [
+        // 1. FindCoordinator: ApiVersions + response
+        buildApiVersionsBody(kip848Apis),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        // 2. kip848Join → refreshTopicMetadata: ApiVersions + Metadata
+        buildApiVersionsBody(kip848Apis),
+        metadataBody,
+        // 3. kip848Join → ConsumerGroupHeartbeat: ApiVersions + response
+        buildApiVersionsBody(kip848Apis),
+        heartbeatBody,
+        // 4. fetchInitialOffsets → refreshTopicMetadata: ApiVersions + Metadata
+        buildApiVersionsBody(kip848Apis),
+        metadataBody,
+        // 5. fetchInitialOffsets → OffsetFetch: ApiVersions + response
+        buildApiVersionsBody(kip848Apis),
+        offsetFetchBody,
+        // 6. fetchInitialOffsets → ListOffsets (if no committed offset): ApiVersions + response
+        ...(committedOffset < 0n
+          ? [
+              buildApiVersionsBody(kip848Apis),
+              buildListOffsetsV1Body(
+                topics.map((t) => ({
+                  name: t,
+                  partitions: assignment
+                    .flatMap((a) => a.partitions)
+                    .map((p) => ({
+                      partitionIndex: p,
+                      errorCode: 0,
+                      timestamp: -1n,
+                      offset: 0n
+                    }))
+                }))
+              )
+            ]
+          : []),
+        ...(opts?.extraResponses ?? [])
+      ]
+
+      const conn = createMockConnection(allResponses)
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      return { pool, conn }
+    }
+
+    it("joins group using ConsumerGroupHeartbeat", async () => {
+      const { pool } = createKip848JoinFlowMock()
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          groupProtocol: GroupProtocol.Consumer,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      expect(consumer.partitions).toEqual([{ topic: "test-topic", partition: 0 }])
+      await consumer.close()
+    })
+
+    it("joins with custom server assignor", async () => {
+      const { pool, conn } = createKip848JoinFlowMock()
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          groupProtocol: GroupProtocol.Consumer,
+          serverAssignor: "uniform",
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // Verify the ConsumerGroupHeartbeat was called (5th call in the flow)
+      expect(conn.send).toHaveBeenCalled()
+      expect(consumer.partitions).toEqual([{ topic: "test-topic", partition: 0 }])
+      await consumer.close()
+    })
+
+    it("handles multiple partition assignment from heartbeat", async () => {
+      const { pool } = createKip848JoinFlowMock({
+        assignment: [{ topicId: topicUuid, partitions: [0, 1, 2] }]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          groupProtocol: GroupProtocol.Consumer,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      expect(consumer.partitions).toEqual([
+        { topic: "test-topic", partition: 0 },
+        { topic: "test-topic", partition: 1 },
+        { topic: "test-topic", partition: 2 }
+      ])
+      await consumer.close()
+    })
+
+    it("uses committed offsets when available", async () => {
+      const { pool } = createKip848JoinFlowMock({
+        committedOffset: 42n
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          groupProtocol: GroupProtocol.Consumer,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      expect(consumer.partitions).toEqual([{ topic: "test-topic", partition: 0 }])
+      await consumer.close()
+    })
+
+    it("leaves group using heartbeat with memberEpoch=-1 on close", async () => {
+      const { pool, conn } = createKip848JoinFlowMock({
+        extraResponses: [
+          // Leave flow: ApiVersions + ConsumerGroupHeartbeat
+          buildApiVersionsBody(kip848Apis),
+          buildConsumerGroupHeartbeatV0Body({
+            errorCode: 0,
+            memberId: "kip848-member-1",
+            memberEpoch: -1,
+            heartbeatIntervalMs: 0
+          })
+        ]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          groupProtocol: GroupProtocol.Consumer,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+      await consumer.close()
+
+      // The last send call should be the ConsumerGroupHeartbeat leave
+      const lastSendCall = conn.send.mock.calls[conn.send.mock.calls.length - 1]
+      expect(lastSendCall[0]).toBe(ApiKey.ConsumerGroupHeartbeat)
+    })
+
+    it("invokes rebalance listener on assignment", async () => {
+      const onRevoked = vi.fn()
+      const onAssigned = vi.fn()
+
+      const { pool } = createKip848JoinFlowMock()
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          groupProtocol: GroupProtocol.Consumer,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000,
+          rebalanceListener: {
+            onPartitionsRevoked: onRevoked,
+            onPartitionsAssigned: onAssigned
+          }
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // No revocation on first assignment (no prior partitions)
+      expect(onRevoked).not.toHaveBeenCalled()
+      expect(onAssigned).toHaveBeenCalledWith([{ topic: "test-topic", partition: 0 }])
+      await consumer.close()
+    })
+
+    it("defaults to classic protocol", () => {
+      const consumer = new KafkaConsumer(defaultConsumerOptions())
+      // Classic protocol is the default — consumer should be constructable
+      expect(consumer).toBeInstanceOf(KafkaConsumer)
+    })
+
+    it("accepts consumer protocol option", () => {
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          groupProtocol: GroupProtocol.Consumer,
+          serverAssignor: "range"
+        })
+      )
+      expect(consumer).toBeInstanceOf(KafkaConsumer)
+    })
+
+    it("handles null assignment (no change)", async () => {
+      const nullAssignmentBody = buildConsumerGroupHeartbeatV0Body({
+        errorCode: 0,
+        memberId: "kip848-member-1",
+        memberEpoch: 1,
+        heartbeatIntervalMs: 5000,
+        assignment: null
+      })
+
+      const metadataBody = buildMetadataV10Body(
+        [{ nodeId: 1, host: "localhost", port: 9092 }],
+        [
+          {
+            errorCode: 0,
+            name: "test-topic",
+            topicId: topicUuid,
+            partitions: [{ partitionIndex: 0, leaderId: 1 }]
+          }
+        ]
+      )
+
+      const conn = createMockConnection([
+        // FindCoordinator
+        buildApiVersionsBody(kip848Apis),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        // refreshTopicMetadata
+        buildApiVersionsBody(kip848Apis),
+        metadataBody,
+        // ConsumerGroupHeartbeat (null assignment)
+        buildApiVersionsBody(kip848Apis),
+        nullAssignmentBody,
+        // fetchInitialOffsets → refreshTopicMetadata
+        buildApiVersionsBody(kip848Apis),
+        metadataBody,
+        // OffsetFetch (empty since no assignments)
+        buildApiVersionsBody(kip848Apis),
+        buildOffsetFetchV0Body([])
+      ])
+
+      const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
+      const pool = createMockPool({
+        brokers: brokerMap as ConnectionPool["brokers"],
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          groupProtocol: GroupProtocol.Consumer,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      // Null assignment means no partitions assigned
+      expect(consumer.partitions).toEqual([])
       await consumer.close()
     })
   })

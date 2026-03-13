@@ -21,6 +21,12 @@ import type { ConnectionPool } from "../network/broker-pool.js"
 import type { KafkaConnection } from "../network/connection.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "../protocol/api-versions.js"
 import {
+  type ConsumerGroupHeartbeatRequest,
+  type ConsumerGroupHeartbeatRequestTopicPartition,
+  decodeConsumerGroupHeartbeatResponse,
+  encodeConsumerGroupHeartbeatRequest
+} from "../protocol/consumer-group-heartbeat.js"
+import {
   decodeFetchResponse,
   encodeFetchRequest,
   FetchIsolationLevel,
@@ -98,6 +104,21 @@ export const OffsetResetStrategy = {
 export type OffsetResetStrategy = (typeof OffsetResetStrategy)[keyof typeof OffsetResetStrategy]
 
 /**
+ * Consumer group protocol selection.
+ *
+ * - `"classic"` — JoinGroup/SyncGroup/Heartbeat/LeaveGroup (default)
+ * - `"consumer"` — KIP-848 ConsumerGroupHeartbeat with server-side assignment
+ */
+export const GroupProtocol = {
+  /** Classic consumer group protocol (JoinGroup/SyncGroup/Heartbeat/LeaveGroup). */
+  Classic: "classic",
+  /** KIP-848 consumer group protocol (ConsumerGroupHeartbeat with server-side assignment). */
+  Consumer: "consumer"
+} as const
+
+export type GroupProtocol = (typeof GroupProtocol)[keyof typeof GroupProtocol]
+
+/**
  * Callback invoked when a rebalance occurs.
  */
 export type RebalanceListener = {
@@ -149,10 +170,22 @@ export type ConsumerOptions = {
   readonly rebalanceListener?: RebalanceListener
   /** Group instance ID for static membership (KIP-345). Null for dynamic. */
   readonly groupInstanceId?: string | null
-  /** Partition assignor strategy. @default rangeAssignor */
+  /** Partition assignor strategy (classic protocol only). @default rangeAssignor */
   readonly assignor?: PartitionAssignor
   /** Retry configuration. */
   readonly retry?: ConsumerRetryConfig
+  /**
+   * Consumer group protocol.
+   * - `"classic"` \u2014 JoinGroup/SyncGroup/Heartbeat/LeaveGroup (default)
+   * - `"consumer"` \u2014 KIP-848 ConsumerGroupHeartbeat with server-side assignment
+   * @default "classic"
+   */
+  readonly groupProtocol?: GroupProtocol
+  /**
+   * Server-side assignor name for KIP-848 protocol (e.g. "range", "uniform").
+   * Only used when `groupProtocol` is `"consumer"`. Null uses the broker default.
+   */
+  readonly serverAssignor?: string | null
 }
 
 /**
@@ -355,6 +388,8 @@ export class KafkaConsumer {
   private readonly rebalanceListener: RebalanceListener
   private readonly groupInstanceId: string | null
   private readonly assignor: PartitionAssignor
+  private readonly groupProtocol: GroupProtocol
+  private readonly serverAssignor: string | null
   private maxRetries!: number
   private initialRetryMs!: number
   private maxRetryMs!: number
@@ -363,13 +398,18 @@ export class KafkaConsumer {
   // Subscriptions
   private subscribedTopics: string[] = []
 
-  // Group coordination state
+  // Group coordination state (classic protocol)
   private memberId = ""
   private generationId = -1
   private coordinatorNodeId = -1
   private isLeader = false
   private joined = false
   private closed = false
+
+  // KIP-848 state
+  private memberEpoch = 0
+  private readonly topicIdToName = new Map<string, string>()
+  private readonly topicNameToId = new Map<string, Uint8Array>()
 
   // Partition assignments
   private readonly assignments = new Map<string, Map<number, PartitionState>>()
@@ -395,6 +435,8 @@ export class KafkaConsumer {
     this.rebalanceListener = options.rebalanceListener ?? {}
     this.groupInstanceId = options.groupInstanceId ?? null
     this.assignor = options.assignor ?? rangeAssignor
+    this.groupProtocol = options.groupProtocol ?? GroupProtocol.Classic
+    this.serverAssignor = options.serverAssignor ?? null
     this.initRetryOptions(options.retry)
   }
 
@@ -523,7 +565,11 @@ export class KafkaConsumer {
 
     try {
       if (this.joined) {
-        await this.leaveGroup()
+        if (this.groupProtocol === GroupProtocol.Consumer) {
+          await this.kip848Leave()
+        } else {
+          await this.leaveGroup()
+        }
       }
     } catch {
       // best-effort leave
@@ -533,6 +579,7 @@ export class KafkaConsumer {
     this.assignments.clear()
     this.memberId = ""
     this.generationId = -1
+    this.memberEpoch = 0
   }
 
   // -------------------------------------------------------------------------
@@ -546,7 +593,11 @@ export class KafkaConsumer {
     for (let attempt = 0; ; attempt++) {
       try {
         await this.findCoordinator()
-        await this.joinAndSync()
+        if (this.groupProtocol === GroupProtocol.Consumer) {
+          await this.kip848Join()
+        } else {
+          await this.joinAndSync()
+        }
         await this.fetchInitialOffsets()
         this.startHeartbeat()
         if (this.autoCommit) {
@@ -1286,7 +1337,8 @@ export class KafkaConsumer {
 
       const request: OffsetCommitRequest = {
         groupId: this.groupId,
-        generationIdOrMemberEpoch: this.generationId,
+        generationIdOrMemberEpoch:
+          this.groupProtocol === GroupProtocol.Consumer ? this.memberEpoch : this.generationId,
         memberId: this.memberId,
         groupInstanceId: this.groupInstanceId,
         topics
@@ -1341,7 +1393,11 @@ export class KafkaConsumer {
   private startHeartbeat(): void {
     this.stopHeartbeat()
     this.heartbeatTimer = setInterval(() => {
-      void this.sendHeartbeat()
+      if (this.groupProtocol === GroupProtocol.Consumer) {
+        void this.kip848Heartbeat()
+      } else {
+        void this.sendHeartbeat()
+      }
     }, this.heartbeatIntervalMs)
   }
 
@@ -1461,6 +1517,259 @@ export class KafkaConsumer {
   }
 
   // -------------------------------------------------------------------------
+  // Internal — KIP-848 Consumer Group Protocol
+  // -------------------------------------------------------------------------
+
+  /** KIP-848 error codes. */
+  private static readonly kip848UnknownMemberId = 25
+  private static readonly kip848FencedMemberEpoch = 110
+  private static readonly kip848UnreleasedInstanceId = 112
+
+  /**
+   * Join the group using the KIP-848 ConsumerGroupHeartbeat API.
+   *
+   * Sends a heartbeat with memberEpoch=0 to join. The coordinator responds
+   * with a memberId, memberEpoch, and partition assignment.
+   */
+  private async kip848Join(): Promise<void> {
+    // Fetch metadata first to build topic ID mappings
+    await this.refreshTopicMetadata()
+    this.buildTopicIdMappings()
+
+    const conn = await this.pool.getConnectionByNodeId(this.coordinatorNodeId)
+    try {
+      const version = await this.negotiateApiVersion(conn, ApiKey.ConsumerGroupHeartbeat)
+
+      const request: ConsumerGroupHeartbeatRequest = {
+        groupId: this.groupId,
+        memberId: this.memberId,
+        memberEpoch: 0,
+        instanceId: this.groupInstanceId ?? null,
+        rackId: null,
+        rebalanceTimeoutMs: this.rebalanceTimeoutMs,
+        subscribedTopicNames: this.subscribedTopics,
+        serverAssignor: this.serverAssignor,
+        topicPartitions: null
+      }
+
+      const responseReader = await conn.send(ApiKey.ConsumerGroupHeartbeat, version, (writer) => {
+        encodeConsumerGroupHeartbeatRequest(writer, request, version)
+      })
+
+      const result = decodeConsumerGroupHeartbeatResponse(responseReader, version)
+      if (!result.ok) {
+        throw new KafkaConnectionError(
+          `failed to decode consumer group heartbeat response: ${result.error.message}`,
+          { broker: conn.broker }
+        )
+      }
+
+      if (result.value.errorCode !== 0) {
+        throw new KafkaProtocolError(
+          `consumer group heartbeat failed with error code ${String(result.value.errorCode)}`,
+          result.value.errorCode,
+          isRetriableConsumerError(result.value.errorCode)
+        )
+      }
+
+      this.memberId = result.value.memberId ?? this.memberId
+      this.memberEpoch = result.value.memberEpoch
+
+      if (result.value.assignment) {
+        await this.kip848ApplyAssignment(result.value.assignment.topicPartitions)
+      }
+
+      this.joined = true
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Periodic KIP-848 heartbeat — keeps the member alive and receives
+   * assignment updates from the coordinator.
+   */
+  private async kip848Heartbeat(): Promise<void> {
+    if (this.closed || !this.joined) {
+      return
+    }
+
+    try {
+      const conn = await this.pool.getConnectionByNodeId(this.coordinatorNodeId)
+      try {
+        const version = await this.negotiateApiVersion(conn, ApiKey.ConsumerGroupHeartbeat)
+
+        const request: ConsumerGroupHeartbeatRequest = {
+          groupId: this.groupId,
+          memberId: this.memberId,
+          memberEpoch: this.memberEpoch,
+          instanceId: this.groupInstanceId ?? null,
+          rackId: null,
+          rebalanceTimeoutMs: this.rebalanceTimeoutMs,
+          subscribedTopicNames: null, // unchanged
+          serverAssignor: null,
+          topicPartitions: this.buildKip848TopicPartitions()
+        }
+
+        const responseReader = await conn.send(ApiKey.ConsumerGroupHeartbeat, version, (writer) => {
+          encodeConsumerGroupHeartbeatRequest(writer, request, version)
+        })
+
+        const result = decodeConsumerGroupHeartbeatResponse(responseReader, version)
+        if (!result.ok) {
+          return
+        }
+
+        if (
+          result.value.errorCode === KafkaConsumer.kip848UnknownMemberId ||
+          result.value.errorCode === KafkaConsumer.kip848FencedMemberEpoch ||
+          result.value.errorCode === KafkaConsumer.kip848UnreleasedInstanceId
+        ) {
+          this.joined = false
+          this.memberId = ""
+          this.memberEpoch = 0
+          this.stopHeartbeat()
+          this.stopAutoCommit()
+          return
+        }
+
+        if (result.value.errorCode !== 0) {
+          return
+        }
+
+        this.memberEpoch = result.value.memberEpoch
+
+        if (result.value.assignment) {
+          await this.kip848ApplyAssignment(result.value.assignment.topicPartitions)
+        }
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    } catch {
+      // heartbeat failures are handled on next poll
+    }
+  }
+
+  /**
+   * Leave the group using KIP-848: send heartbeat with memberEpoch=-1.
+   */
+  private async kip848Leave(): Promise<void> {
+    const conn = await this.pool.getConnectionByNodeId(this.coordinatorNodeId)
+    try {
+      const version = await this.negotiateApiVersion(conn, ApiKey.ConsumerGroupHeartbeat)
+
+      const request: ConsumerGroupHeartbeatRequest = {
+        groupId: this.groupId,
+        memberId: this.memberId,
+        memberEpoch: -1,
+        instanceId: this.groupInstanceId ?? null,
+        rackId: null,
+        rebalanceTimeoutMs: this.rebalanceTimeoutMs,
+        subscribedTopicNames: null,
+        serverAssignor: null,
+        topicPartitions: null
+      }
+
+      const responseReader = await conn.send(ApiKey.ConsumerGroupHeartbeat, version, (writer) => {
+        encodeConsumerGroupHeartbeatRequest(writer, request, version)
+      })
+
+      const result = decodeConsumerGroupHeartbeatResponse(responseReader, version)
+      if (!result.ok) {
+        return
+      }
+
+      // Ignore errors on leave — best effort
+    } finally {
+      this.pool.releaseConnection(conn)
+    }
+  }
+
+  /**
+   * Apply a new partition assignment from a KIP-848 heartbeat response.
+   */
+  private async kip848ApplyAssignment(
+    topicPartitions: readonly {
+      readonly topicId: Uint8Array
+      readonly partitions: readonly number[]
+    }[]
+  ): Promise<void> {
+    const oldAssignments = [...this.partitions]
+
+    // Notify revoked
+    if (oldAssignments.length > 0 && this.rebalanceListener.onPartitionsRevoked) {
+      await this.rebalanceListener.onPartitionsRevoked(oldAssignments)
+    }
+
+    // Update assignments
+    this.assignments.clear()
+    const newAssignments: AssignedPartition[] = []
+
+    for (const tp of topicPartitions) {
+      const topicName = this.topicIdToName.get(uuidToHex(tp.topicId))
+      if (topicName === undefined || topicName === "") {
+        continue
+      }
+
+      const partMap = new Map<number, PartitionState>()
+      for (const p of tp.partitions) {
+        partMap.set(p, { fetchOffset: -1n, committed: false })
+        newAssignments.push({ topic: topicName, partition: p })
+      }
+      this.assignments.set(topicName, partMap)
+    }
+
+    // Notify assigned
+    if (newAssignments.length > 0 && this.rebalanceListener.onPartitionsAssigned) {
+      await this.rebalanceListener.onPartitionsAssigned(newAssignments)
+    }
+  }
+
+  /**
+   * Build topic-partitions for KIP-848 heartbeat (current assignment state).
+   */
+  private buildKip848TopicPartitions(): ConsumerGroupHeartbeatRequestTopicPartition[] {
+    const result: ConsumerGroupHeartbeatRequestTopicPartition[] = []
+
+    for (const [topic, partitions] of this.assignments) {
+      const topicId = this.topicNameToId.get(topic)
+      if (!topicId) {
+        continue
+      }
+
+      result.push({
+        topicId,
+        partitions: [...partitions.keys()]
+      })
+    }
+
+    return result
+  }
+
+  /**
+   * Build topic ID ↔ name mappings from cached metadata.
+   */
+  private buildTopicIdMappings(): void {
+    this.topicIdToName.clear()
+    this.topicNameToId.clear()
+
+    for (const [topicName, partitions] of this.topicMetadataCache) {
+      // We need to get the topic ID from the metadata — it's on the MetadataTopic,
+      // not MetadataPartition. Store it from metadata fetch instead.
+      void partitions
+      const topicId = this.topicIdCache.get(topicName)
+      if (topicId) {
+        const hex = uuidToHex(topicId)
+        this.topicIdToName.set(hex, topicName)
+        this.topicNameToId.set(topicName, topicId)
+      }
+    }
+  }
+
+  /** Cache of topic name → topic ID from Metadata responses. */
+  private readonly topicIdCache = new Map<string, Uint8Array>()
+
+  // -------------------------------------------------------------------------
   // Internal — Metadata & Version Negotiation
   // -------------------------------------------------------------------------
 
@@ -1528,6 +1837,9 @@ export class KafkaConsumer {
     for (const topic of result.value.topics) {
       if (topic.errorCode === 0) {
         this.topicMetadataCache.set(topic.name ?? "", topic.partitions)
+        if (topic.topicId) {
+          this.topicIdCache.set(topic.name ?? "", topic.topicId)
+        }
       }
     }
   }
@@ -1570,6 +1882,9 @@ export class KafkaConsumer {
       for (const topic of result.value.topics) {
         if (topic.errorCode === 0) {
           this.topicMetadataCache.set(topic.name ?? "", topic.partitions)
+          if (topic.topicId) {
+            this.topicIdCache.set(topic.name ?? "", topic.topicId)
+          }
         }
       }
     } finally {
@@ -1625,6 +1940,17 @@ function decodeConsumerProtocolMemberMetadata(data: Uint8Array): { topics: strin
   }
 
   return { topics }
+}
+
+/**
+ * Convert a 16-byte UUID to a hex string for use as a Map key.
+ */
+function uuidToHex(uuid: Uint8Array): string {
+  let hex = ""
+  for (let i = 0; i < uuid.byteLength; i++) {
+    hex += uuid[i].toString(16).padStart(2, "0")
+  }
+  return hex
 }
 
 /**

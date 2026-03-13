@@ -520,8 +520,8 @@ transaction/producer introspection compatible with Kafka 4.2.
 
 - [x] ConsumerGroupHeartbeat request/response codec (API key 68, v0–v0)
 - [x] ConsumerGroupDescribe request/response codec (API key 69, v0–v0)
-- [ ] Server-side assignor support in consumer (new group protocol)
-- [ ] Backward compatibility with classic group protocol
+- [x] Server-side assignor support in consumer (new group protocol)
+- [x] Backward compatibility with classic group protocol
 
 Acceptance: Consumer can join groups using the new KIP-848 protocol against Kafka 4.2 brokers, falls
 back to classic protocol for older brokers.
