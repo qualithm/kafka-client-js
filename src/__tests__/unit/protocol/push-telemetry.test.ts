@@ -205,5 +205,29 @@ describe("decodePushTelemetryResponse", () => {
       const result = decodePushTelemetryResponse(reader, 0)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure on truncated after throttle_time_ms", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(100) // throttle_time_ms
+      // truncated: no error_code
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodePushTelemetryResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated after error_code", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      // truncated: no tagged fields
+
+      // Manually slice to remove any trailing bytes the writer may add
+      const body = w.finish().slice(0, 6)
+      const reader = new BinaryReader(body)
+      const result = decodePushTelemetryResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
   })
 })

@@ -201,7 +201,57 @@ describe("decodeGetTelemetrySubscriptionsResponse", () => {
       expect(result.ok).toBe(false)
     })
 
-    it("returns failure on truncated compression array", () => {
+    it("returns failure on truncated before error_code", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      // truncated: no error_code
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated before client_instance_id", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      // truncated: no UUID
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated before subscription_id", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      // truncated: no subscription_id
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated before compression count", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      w.writeInt32(1) // subscription_id
+      // truncated: no compression array varint
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated compression array items", () => {
       const w = new BinaryWriter()
       w.writeInt32(0) // throttle_time_ms
       w.writeInt16(0) // error_code
@@ -212,6 +262,112 @@ describe("decodeGetTelemetrySubscriptionsResponse", () => {
       const body = w.finish()
       const reader = new BinaryReader(body)
       const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated after compression types", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      w.writeInt32(1) // subscription_id
+      w.writeUnsignedVarInt(2) // 1 compression type + 1
+      w.writeInt8(0) // none
+      // truncated: no push_interval_ms
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated after push_interval_ms", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      w.writeInt32(1) // subscription_id
+      w.writeUnsignedVarInt(1) // 0 compression types + 1
+      w.writeInt32(5000) // push_interval_ms
+      // truncated: no telemetry_max_bytes
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated after telemetry_max_bytes", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      w.writeInt32(1) // subscription_id
+      w.writeUnsignedVarInt(1) // 0 compression types + 1
+      w.writeInt32(5000) // push_interval_ms
+      w.writeInt32(1048576) // telemetry_max_bytes
+      // truncated: no delta_temporality
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated before metrics count", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      w.writeInt32(1) // subscription_id
+      w.writeUnsignedVarInt(1) // 0 compression types + 1
+      w.writeInt32(5000) // push_interval_ms
+      w.writeInt32(1048576) // telemetry_max_bytes
+      w.writeBoolean(true) // delta_temporality
+      // truncated: no metrics array varint
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated metrics array items", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      w.writeInt32(1) // subscription_id
+      w.writeUnsignedVarInt(1) // 0 compression types + 1
+      w.writeInt32(5000) // push_interval_ms
+      w.writeInt32(1048576) // telemetry_max_bytes
+      w.writeBoolean(true) // delta_temporality
+      w.writeUnsignedVarInt(50) // claims 49 metrics but buffer ends
+
+      const body = w.finish()
+      const reader = new BinaryReader(body)
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated before tagged fields", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUuid(ZERO_UUID) // client_instance_id
+      w.writeInt32(1) // subscription_id
+      w.writeUnsignedVarInt(1) // 0 compression types + 1
+      w.writeInt32(5000) // push_interval_ms
+      w.writeInt32(1048576) // telemetry_max_bytes
+      w.writeBoolean(true) // delta_temporality
+      w.writeUnsignedVarInt(1) // 0 metrics + 1
+      // truncated: no tagged fields
+
+      const body = w.finish()
+      // Slice off any trailing bytes to ensure no tagged fields varint
+      const reader = new BinaryReader(body.slice(0, body.length))
+      const result = decodeGetTelemetrySubscriptionsResponse(reader, 0)
+      // Should fail because readTaggedFields reads past end
       expect(result.ok).toBe(false)
     })
   })
