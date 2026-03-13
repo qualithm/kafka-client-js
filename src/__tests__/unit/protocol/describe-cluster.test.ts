@@ -184,4 +184,98 @@ describe("decodeDescribeClusterResponse", () => {
     expect(result.value.errorCode).toBe(29)
     expect(result.value.errorMessage).toBe("not authorised")
   })
+
+  it("decodes response with multiple brokers and rack", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(0) // error_code
+    w.writeCompactString(null) // error_message
+    w.writeCompactString("cluster-multi") // cluster_id
+    w.writeInt32(1) // controller_id
+    // brokers (compact: 3 + 1)
+    w.writeUnsignedVarInt(4)
+    for (const [id, host, port, rack] of [
+      [1, "broker1.local", 9092, "rack-a"],
+      [2, "broker2.local", 9093, "rack-b"],
+      [3, "broker3.local", 9094, null]
+    ] as const) {
+      w.writeInt32(id)
+      w.writeCompactString(host)
+      w.writeInt32(port)
+      w.writeCompactString(rack)
+      w.writeTaggedFields([])
+    }
+    w.writeInt32(8) // cluster_authorized_operations
+    w.writeTaggedFields([])
+
+    const body = w.finish()
+    const reader = new BinaryReader(body)
+    const result = decodeDescribeClusterResponse(reader, 0)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    expect(result.value.brokers).toHaveLength(3)
+    expect(result.value.brokers[0].rack).toBe("rack-a")
+    expect(result.value.brokers[1].brokerId).toBe(2)
+    expect(result.value.brokers[1].host).toBe("broker2.local")
+    expect(result.value.brokers[1].port).toBe(9093)
+    expect(result.value.brokers[1].rack).toBe("rack-b")
+    expect(result.value.brokers[2].rack).toBeNull()
+    expect(result.value.clusterAuthorizedOperations).toBe(8)
+  })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeDescribeClusterResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated broker entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeCompactString(null) // error_message
+      w.writeCompactString("cluster-x") // cluster_id
+      w.writeInt32(1) // controller_id
+      w.writeUnsignedVarInt(2) // 1 broker + 1
+      w.writeInt32(1) // broker_id
+      // Missing host, port, rack, tagged fields
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeClusterResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v1 endpoint_type", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeCompactString(null) // error_message
+      w.writeCompactString("cluster-x") // cluster_id
+      w.writeInt32(1) // controller_id
+      w.writeUnsignedVarInt(1) // 0 brokers + 1
+      w.writeInt32(0) // cluster_authorized_operations
+      // Missing endpoint_type for v1
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeClusterResponse(reader, 1)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated cluster_id", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeCompactString(null) // error_message
+      // Missing cluster_id and beyond
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeClusterResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

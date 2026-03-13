@@ -268,4 +268,27 @@ describe("decodeAlterUserScramCredentialsResponse", () => {
     const result = decodeAlterUserScramCredentialsResponse(reader, 0)
     expect(result.ok).toBe(false)
   })
+
+  it("returns failure on truncated result entry", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeUnsignedVarInt(2) // results array (1 entry)
+    w.writeCompactString("alice") // user
+    w.writeInt16(0) // error_code
+    // error_message missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeAlterUserScramCredentialsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns failure on truncated results array count", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    // results array count missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf.slice(0, 3))
+    const result = decodeAlterUserScramCredentialsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
 })

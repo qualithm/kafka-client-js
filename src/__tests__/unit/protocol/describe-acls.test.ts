@@ -392,5 +392,47 @@ describe("decodeDescribeAclsResponse", () => {
       const result = decodeDescribeAclsResponse(reader, 2)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure on truncated resource entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message (v0 — standard string)
+      w.writeInt32(1) // resources array (1 entry)
+      w.writeInt8(2) // resource_type — but resource_name missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeDescribeAclsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated acl entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message (v0)
+      w.writeInt32(1) // resources array (1 entry)
+      w.writeInt8(2) // resource_type
+      w.writeString("topic-a") // resource_name
+      w.writeInt32(1) // acls array (1 entry)
+      // principal missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeDescribeAclsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v2 resource entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeCompactString(null) // error_message (v2 — compact)
+      w.writeUnsignedVarInt(2) // resources compact array (1 entry)
+      w.writeInt8(2) // resource_type — but compact resource_name missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeDescribeAclsResponse(reader, 2)
+      expect(result.ok).toBe(false)
+    })
   })
 })

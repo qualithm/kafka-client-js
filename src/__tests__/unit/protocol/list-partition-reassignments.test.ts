@@ -310,4 +310,44 @@ describe("decodeListPartitionReassignmentsResponse", () => {
     const result = decodeListPartitionReassignmentsResponse(reader, 0)
     expect(result.ok).toBe(false)
   })
+
+  it("returns failure on truncated topic entry", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(0) // error_code
+    w.writeCompactString(null) // error_message
+    w.writeUnsignedVarInt(2) // topics array (1 topic)
+    // topic name written, but partitions missing
+    w.writeCompactString("topic-a")
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeListPartitionReassignmentsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns failure on truncated partition entry", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(0) // error_code
+    w.writeCompactString(null) // error_message
+    w.writeUnsignedVarInt(2) // topics (1 topic)
+    w.writeCompactString("topic-a")
+    w.writeUnsignedVarInt(2) // partitions (1 partition)
+    w.writeInt32(0) // partition_index — but replicas missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeListPartitionReassignmentsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns failure on truncated error message", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(0) // error_code
+    // no error_message written
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeListPartitionReassignmentsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
 })

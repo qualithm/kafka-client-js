@@ -392,5 +392,48 @@ describe("decodeDescribeGroupsResponse", () => {
       const result = decodeDescribeGroupsResponse(reader, 1)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure on truncated group member", () => {
+      const w = new BinaryWriter()
+      // v0 — no throttle_time
+      w.writeInt32(1) // groups array (1 entry)
+      w.writeInt16(0) // error_code
+      w.writeString("group-1") // group_id
+      w.writeString("Stable") // group_state
+      w.writeString("consumer") // protocol_type
+      w.writeString("range") // protocol_data
+      w.writeInt32(1) // members array (1 entry)
+      w.writeString("member-1") // member_id — but client_id missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeDescribeGroupsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v5 group entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2) // groups compact array (1 entry)
+      w.writeInt16(0) // error_code
+      w.writeCompactString("group-1") // group_id
+      // group_state missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeDescribeGroupsResponse(reader, 5)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated group protocol_type", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(1) // groups array (1 entry)
+      w.writeInt16(0) // error_code
+      w.writeString("group-1") // group_id
+      w.writeString("Stable") // group_state
+      // protocol_type missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeDescribeGroupsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
   })
 })

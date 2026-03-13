@@ -251,5 +251,44 @@ describe("decodeListGroupsResponse", () => {
       const result = decodeListGroupsResponse(reader, 1)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure on truncated group entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt16(0) // error_code
+      w.writeInt32(1) // groups array (1 entry)
+      // group_id missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListGroupsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v4 group state", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms (v1+)
+      w.writeInt16(0) // error_code
+      w.writeUnsignedVarInt(2) // groups compact array (1 entry)
+      w.writeCompactString("group-1") // group_id
+      w.writeCompactString("consumer") // protocol_type
+      // group_state missing (required for v4+)
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeListGroupsResponse(reader, 4)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v3 tagged fields", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUnsignedVarInt(2) // groups compact array (1 entry)
+      w.writeCompactString("group-1") // group_id
+      w.writeCompactString("consumer") // protocol_type
+      // tagged fields missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf.slice(0, buf.length - 1))
+      const result = decodeListGroupsResponse(reader, 3)
+      expect(result.ok).toBe(false)
+    })
   })
 })

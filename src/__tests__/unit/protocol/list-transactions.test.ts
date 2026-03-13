@@ -168,4 +168,39 @@ describe("decodeListTransactionsResponse", () => {
 
     expect(result.value.errorCode).toBe(29)
   })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeListTransactionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated transaction entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUnsignedVarInt(1) // 0 unknown state filters
+      w.writeUnsignedVarInt(2) // 1 transaction + 1
+      w.writeCompactString("txn-1") // transactional_id
+      // Missing producer_id and transaction_state
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeListTransactionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated unknown state filters", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeUnsignedVarInt(3) // 2 unknown filters + 1
+      w.writeCompactString("Bad")
+      // Missing second filter entry
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeListTransactionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

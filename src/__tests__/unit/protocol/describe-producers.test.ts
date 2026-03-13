@@ -166,4 +166,115 @@ describe("decodeDescribeProducersResponse", () => {
     expect(result.value.throttleTimeMs).toBe(5)
     expect(result.value.topics[0].partitions[0].activeProducers).toHaveLength(0)
   })
+
+  it("decodes response with multiple topics and producers", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    // 2 topics + 1
+    w.writeUnsignedVarInt(3)
+
+    // topic 1 with 2 partitions
+    w.writeCompactString("topic-a")
+    w.writeUnsignedVarInt(3) // 2 partitions + 1
+    // partition 0
+    w.writeInt32(0)
+    w.writeInt16(0)
+    w.writeCompactString(null)
+    w.writeUnsignedVarInt(2) // 1 producer + 1
+    w.writeInt64(100n)
+    w.writeInt32(1)
+    w.writeInt32(10)
+    w.writeInt64(5000n)
+    w.writeInt32(-1)
+    w.writeInt64(-1n)
+    w.writeTaggedFields([])
+    w.writeTaggedFields([])
+    // partition 1
+    w.writeInt32(1)
+    w.writeInt16(0)
+    w.writeCompactString(null)
+    w.writeUnsignedVarInt(1) // 0 producers
+    w.writeTaggedFields([])
+    w.writeTaggedFields([]) // topic tagged
+
+    // topic 2 with error
+    w.writeCompactString("topic-b")
+    w.writeUnsignedVarInt(2) // 1 partition + 1
+    w.writeInt32(0)
+    w.writeInt16(3) // UNKNOWN_TOPIC_OR_PARTITION
+    w.writeCompactString("topic not found")
+    w.writeUnsignedVarInt(1) // 0 producers
+    w.writeTaggedFields([])
+    w.writeTaggedFields([])
+
+    w.writeTaggedFields([]) // response tagged
+
+    const body = w.finish()
+    const reader = new BinaryReader(body)
+    const result = decodeDescribeProducersResponse(reader, 0)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    expect(result.value.topics).toHaveLength(2)
+    expect(result.value.topics[0].partitions).toHaveLength(2)
+    expect(result.value.topics[0].partitions[0].activeProducers).toHaveLength(1)
+    expect(result.value.topics[0].partitions[1].activeProducers).toHaveLength(0)
+    expect(result.value.topics[1].partitions[0].errorCode).toBe(3)
+    expect(result.value.topics[1].partitions[0].errorMessage).toBe("topic not found")
+  })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeDescribeProducersResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated partition entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2) // 1 topic + 1
+      w.writeCompactString("test-topic")
+      w.writeUnsignedVarInt(2) // 1 partition + 1
+      w.writeInt32(0) // partition_index
+      // Missing error_code and beyond
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeProducersResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated producer state", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2)
+      w.writeCompactString("test-topic")
+      w.writeUnsignedVarInt(2)
+      w.writeInt32(0) // partition_index
+      w.writeInt16(0) // error_code
+      w.writeCompactString(null) // error_message
+      w.writeUnsignedVarInt(2) // 1 producer + 1
+      w.writeInt64(1000n) // producer_id
+      w.writeInt32(5) // producer_epoch
+      // Missing last_sequence and beyond
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeProducersResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated topic entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2) // 1 topic + 1
+      // Missing topic name
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeProducersResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

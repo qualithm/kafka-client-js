@@ -356,4 +356,49 @@ describe("decodeTxnOffsetCommitResponse", () => {
       expect(result.value.taggedFields).toEqual([])
     })
   })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array([0, 0]))
+      const result = decodeTxnOffsetCommitResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated topic entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt32(1) // topics array (1 entry)
+      w.writeString("topic-a") // name
+      // partitions count missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeTxnOffsetCommitResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated partition entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt32(1) // topics array (1 entry)
+      w.writeString("topic-a") // name
+      w.writeInt32(1) // partitions (1 entry)
+      w.writeInt32(0) // partition_index — error_code missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeTxnOffsetCommitResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v3 flexible topic entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2) // topics compact array (1 entry)
+      w.writeCompactString("topic-a") // name
+      // partitions count missing
+      const buf = w.finish()
+      const reader = new BinaryReader(buf)
+      const result = decodeTxnOffsetCommitResponse(reader, 3)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

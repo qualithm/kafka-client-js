@@ -35,7 +35,33 @@ const STANDARD_APIS = [
   { apiKey: ApiKey.DescribeConfigs, minVersion: 0, maxVersion: 0 },
   { apiKey: ApiKey.AlterConfigs, minVersion: 0, maxVersion: 0 },
   { apiKey: ApiKey.DescribeClientQuotas, minVersion: 0, maxVersion: 0 },
-  { apiKey: ApiKey.AlterClientQuotas, minVersion: 0, maxVersion: 0 }
+  { apiKey: ApiKey.AlterClientQuotas, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeGroups, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.ListGroups, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DeleteGroups, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DeleteRecords, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.ElectLeaders, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.IncrementalAlterConfigs, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.AlterPartitionReassignments, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.ListPartitionReassignments, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeAcls, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.CreateAcls, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DeleteAcls, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.CreateDelegationToken, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.RenewDelegationToken, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.ExpireDelegationToken, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeDelegationToken, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeUserScramCredentials, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.AlterUserScramCredentials, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeLogDirs, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.AlterReplicaLogDirs, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeCluster, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeProducers, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeTransactions, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.ListTransactions, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeTopicPartitions, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.UpdateFeatures, minVersion: 0, maxVersion: 0 },
+  { apiKey: ApiKey.DescribeQuorum, minVersion: 0, maxVersion: 0 }
 ]
 
 const TEST_BROKERS = [{ nodeId: 1, host: "localhost", port: 9092, rack: null }]
@@ -419,6 +445,778 @@ describe("KafkaAdmin", () => {
       expect(topics).toHaveLength(1)
       expect(topics[0].name).toBe("my-topic")
       expect(topics[0].partitions).toHaveLength(2)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeGroups
+  // -------------------------------------------------------------------------
+
+  describe("describeGroups", () => {
+    it("describes consumer groups", async () => {
+      const w = new BinaryWriter()
+      // v0: groups array (no throttle)
+      w.writeInt32(1) // groups count
+      w.writeInt16(0) // error_code
+      w.writeString("my-group") // group_id
+      w.writeString("Stable") // group_state
+      w.writeString("consumer") // protocol_type
+      w.writeString("range") // protocol_data
+      w.writeInt32(0) // members count
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeGroups({ groups: ["my-group"] })
+      expect(result).toHaveLength(1)
+      expect(result[0].groupId).toBe("my-group")
+      expect(result[0].groupState).toBe("Stable")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // listGroups
+  // -------------------------------------------------------------------------
+
+  describe("listGroups", () => {
+    it("lists consumer groups", async () => {
+      const w = new BinaryWriter()
+      // v0: error_code, groups
+      w.writeInt16(0) // error_code
+      w.writeInt32(1) // groups count
+      w.writeString("group-1") // group_id
+      w.writeString("consumer") // protocol_type
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.listGroups()
+      expect(result).toHaveLength(1)
+      expect(result[0].groupId).toBe("group-1")
+    })
+
+    it("throws on non-zero error code", async () => {
+      const w = new BinaryWriter()
+      w.writeInt16(29) // CLUSTER_AUTHORIZATION_FAILED
+      w.writeInt32(0) // 0 groups
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool, retry: { maxRetries: 0 } })
+
+      await expect(admin.listGroups()).rejects.toThrow("list groups request failed with error code")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // deleteGroups
+  // -------------------------------------------------------------------------
+
+  describe("deleteGroups", () => {
+    it("deletes consumer groups", async () => {
+      const w = new BinaryWriter()
+      // v0: results
+      w.writeInt32(1) // results count
+      w.writeString("dead-group") // group_id
+      w.writeInt16(0) // error_code
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.deleteGroups({ groupsNames: ["dead-group"] })
+      expect(result).toHaveLength(1)
+      expect(result[0].groupId).toBe("dead-group")
+      expect(result[0].errorCode).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // deleteRecords
+  // -------------------------------------------------------------------------
+
+  describe("deleteRecords", () => {
+    it("deletes records from partitions", async () => {
+      const w = new BinaryWriter()
+      // v0: throttle, topics
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt32(1) // topics count
+      w.writeString("test-topic") // name
+      w.writeInt32(1) // partitions count
+      w.writeInt32(0) // partition_index
+      w.writeInt64(100n) // low_watermark
+      w.writeInt16(0) // error_code
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.deleteRecords({
+        topics: [{ name: "test-topic", partitions: [{ partitionIndex: 0, offset: 100n }] }],
+        timeoutMs: 5000
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe("test-topic")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // electLeaders
+  // -------------------------------------------------------------------------
+
+  describe("electLeaders", () => {
+    it("elects leaders for partitions", async () => {
+      const w = new BinaryWriter()
+      // v0 standard: throttle_time_ms, replica_election_results (no top-level error_code in v0)
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt32(1) // results count
+      w.writeString("test-topic") // topic
+      w.writeInt32(1) // partitions count
+      w.writeInt32(0) // partition_id
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.electLeaders({
+        electionType: 0,
+        topicPartitions: [{ topic: "test-topic", partitions: [{ partitionId: 0 }] }],
+        timeoutMs: 30000
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].topic).toBe("test-topic")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // incrementalAlterConfigs
+  // -------------------------------------------------------------------------
+
+  describe("incrementalAlterConfigs", () => {
+    it("incrementally alters configs", async () => {
+      const w = new BinaryWriter()
+      // v0: throttle, responses
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt32(1) // responses count
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message
+      w.writeInt8(2) // resource_type (Topic)
+      w.writeString("inc-topic") // resource_name
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.incrementalAlterConfigs({
+        resources: [
+          {
+            resourceType: 2,
+            resourceName: "inc-topic",
+            configs: [{ name: "retention.ms", configOperation: 0, value: "86400000" }]
+          }
+        ]
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].resourceName).toBe("inc-topic")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // alterPartitionReassignments
+  // -------------------------------------------------------------------------
+
+  describe("alterPartitionReassignments", () => {
+    it("alters partition reassignments", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, error_code, error_message, responses, tagged
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(2) // 1 response + 1
+      w.writeCompactString("reass-topic")
+      w.writeUnsignedVarInt(2) // 1 partition + 1
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.alterPartitionReassignments({
+        topics: [{ name: "reass-topic", partitions: [{ partitionIndex: 0, replicas: [1, 2, 3] }] }],
+        timeoutMs: 30000
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe("reass-topic")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // listPartitionReassignments
+  // -------------------------------------------------------------------------
+
+  describe("listPartitionReassignments", () => {
+    it("lists partition reassignments", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, error_code, error_message, topics, tagged
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(2) // 1 topic + 1
+      w.writeCompactString("reass-topic")
+      w.writeUnsignedVarInt(2) // 1 partition + 1
+      w.writeInt32(0) // partition_index
+      w.writeUnsignedVarInt(4) // 3 replicas + 1
+      w.writeInt32(1)
+      w.writeInt32(2)
+      w.writeInt32(3)
+      w.writeUnsignedVarInt(2) // 1 adding + 1
+      w.writeInt32(3)
+      w.writeUnsignedVarInt(2) // 1 removing + 1
+      w.writeInt32(2)
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.listPartitionReassignments({
+        topics: [{ name: "reass-topic", partitionIndexes: [0] }],
+        timeoutMs: 30000
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe("reass-topic")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeAcls
+  // -------------------------------------------------------------------------
+
+  describe("describeAcls", () => {
+    it("describes ACLs", async () => {
+      const w = new BinaryWriter()
+      // v0: throttle, error_code, error_message, resources
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeString(null)
+      w.writeInt32(1) // resources
+      w.writeInt8(2) // TOPIC
+      w.writeString("acl-topic")
+      w.writeInt32(1) // acls count
+      w.writeString("User:alice")
+      w.writeString("*")
+      w.writeInt8(2) // ALLOW
+      w.writeInt8(3) // WRITE
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeAcls({
+        resourceTypeFilter: 2,
+        resourceNameFilter: "acl-topic",
+        patternTypeFilter: 3,
+        principalFilter: null,
+        hostFilter: null,
+        operation: 0,
+        permissionType: 0
+      })
+      expect(result).toHaveLength(1)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // createAcls
+  // -------------------------------------------------------------------------
+
+  describe("createAcls", () => {
+    it("creates ACLs", async () => {
+      const w = new BinaryWriter()
+      // v0: throttle, results
+      w.writeInt32(0)
+      w.writeInt32(1) // results count
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.createAcls({
+        creations: [
+          {
+            resourceType: 2,
+            resourceName: "t",
+            resourcePatternType: 3,
+            principal: "User:x",
+            host: "*",
+            operation: 3,
+            permissionType: 2
+          }
+        ]
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].errorCode).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // deleteAcls
+  // -------------------------------------------------------------------------
+
+  describe("deleteAcls", () => {
+    it("deletes ACLs", async () => {
+      const w = new BinaryWriter()
+      // v0: throttle, filter_results
+      w.writeInt32(0)
+      w.writeInt32(1) // filter_results count
+      w.writeInt16(0) // error_code
+      w.writeString(null) // error_message
+      w.writeInt32(0) // matching_acls count (0 = no matches)
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.deleteAcls([
+        {
+          resourceTypeFilter: 2,
+          resourceNameFilter: "t",
+          patternTypeFilter: 3,
+          principalFilter: "User:x",
+          hostFilter: "*",
+          operation: 3,
+          permissionType: 2
+        }
+      ])
+      expect(result).toHaveLength(1)
+      expect(result[0].errorCode).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // createDelegationToken
+  // -------------------------------------------------------------------------
+
+  describe("createDelegationToken", () => {
+    it("creates a delegation token", async () => {
+      const w = new BinaryWriter()
+      // v0: error_code, principal_type, principal_name, issue_timestamp, expiry_timestamp, max_timestamp, token_id, hmac
+      w.writeInt16(0)
+      w.writeString("User")
+      w.writeString("admin")
+      w.writeInt64(1000n) // issue
+      w.writeInt64(2000n) // expiry
+      w.writeInt64(3000n) // max
+      w.writeString("token-1")
+      w.writeBytes(new Uint8Array([0x01, 0x02, 0x03]))
+      w.writeInt32(0) // throttle_time_ms
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.createDelegationToken({
+        renewers: [],
+        maxLifetimeMs: 86400000n
+      })
+      expect(result.errorCode).toBe(0)
+      expect(result.tokenId).toBe("token-1")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // renewDelegationToken
+  // -------------------------------------------------------------------------
+
+  describe("renewDelegationToken", () => {
+    it("renews a delegation token", async () => {
+      const w = new BinaryWriter()
+      // v0: error_code, expiry_timestamp, throttle
+      w.writeInt16(0)
+      w.writeInt64(5000n)
+      w.writeInt32(0)
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.renewDelegationToken({
+        hmac: new Uint8Array([0x01]),
+        renewPeriodMs: 3600000n
+      })
+      expect(result.errorCode).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // expireDelegationToken
+  // -------------------------------------------------------------------------
+
+  describe("expireDelegationToken", () => {
+    it("expires a delegation token", async () => {
+      const w = new BinaryWriter()
+      // v0: error_code, expiry_timestamp, throttle
+      w.writeInt16(0)
+      w.writeInt64(0n)
+      w.writeInt32(0)
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.expireDelegationToken({
+        hmac: new Uint8Array([0x01]),
+        expiryTimePeriodMs: -1n
+      })
+      expect(result.errorCode).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeDelegationTokens
+  // -------------------------------------------------------------------------
+
+  describe("describeDelegationTokens", () => {
+    it("describes delegation tokens", async () => {
+      const w = new BinaryWriter()
+      // v0: error_code, tokens, throttle
+      w.writeInt16(0)
+      w.writeInt32(0) // 0 tokens
+      w.writeInt32(0) // throttle
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeDelegationTokens({ owners: null })
+      expect(result).toHaveLength(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeUserScramCredentials
+  // -------------------------------------------------------------------------
+
+  describe("describeUserScramCredentials", () => {
+    it("describes SCRAM credentials", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, error_code, error_message, results, tagged
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(2) // 1 result + 1
+      w.writeCompactString("alice")
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(2) // 1 credential + 1
+      w.writeInt8(1) // SCRAM-SHA-256
+      w.writeInt32(4096)
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeUserScramCredentials({ users: [{ name: "alice" }] })
+      expect(result).toHaveLength(1)
+      expect(result[0].user).toBe("alice")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // alterUserScramCredentials
+  // -------------------------------------------------------------------------
+
+  describe("alterUserScramCredentials", () => {
+    it("alters SCRAM credentials", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, results, tagged
+      w.writeInt32(0)
+      w.writeUnsignedVarInt(2) // 1 result + 1
+      w.writeCompactString("bob")
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.alterUserScramCredentials({
+        upsertions: [
+          {
+            name: "bob",
+            mechanism: 1,
+            iterations: 4096,
+            salt: new Uint8Array([1]),
+            saltedPassword: new Uint8Array([2])
+          }
+        ],
+        deletions: []
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].user).toBe("bob")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeLogDirs
+  // -------------------------------------------------------------------------
+
+  describe("describeLogDirs", () => {
+    it("describes log directories", async () => {
+      const w = new BinaryWriter()
+      // v0: throttle, results
+      w.writeInt32(0)
+      w.writeInt32(1) // results
+      w.writeInt16(0) // error_code
+      w.writeString("/var/kafka-logs") // log_dir
+      w.writeInt32(0) // topics count
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeLogDirs({ topics: null })
+      expect(result).toHaveLength(1)
+      expect(result[0].logDir).toBe("/var/kafka-logs")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // alterReplicaLogDirs
+  // -------------------------------------------------------------------------
+
+  describe("alterReplicaLogDirs", () => {
+    it("alters replica log dirs", async () => {
+      const w = new BinaryWriter()
+      // v0: throttle, results
+      w.writeInt32(0)
+      w.writeInt32(1) // results
+      w.writeString("moved-topic") // topic_name
+      w.writeInt32(1) // partitions
+      w.writeInt32(0) // partition_index
+      w.writeInt16(0) // error_code
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.alterReplicaLogDirs({
+        dirs: [{ logDir: "/var/kafka-logs-2", topics: [{ topic: "moved-topic", partitions: [0] }] }]
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].topicName).toBe("moved-topic")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeCluster
+  // -------------------------------------------------------------------------
+
+  describe("describeCluster", () => {
+    it("describes the cluster", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, error_code, error_message, cluster_id, controller_id, brokers, auth_ops, tagged
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeCompactString("cluster-1")
+      w.writeInt32(1)
+      w.writeUnsignedVarInt(1) // 0 brokers
+      w.writeInt32(-2147483648)
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeCluster({
+        includeClusterAuthorizedOperations: false
+      })
+      expect(result.clusterId).toBe("cluster-1")
+      expect(result.controllerId).toBe(1)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeProducers
+  // -------------------------------------------------------------------------
+
+  describe("describeProducers", () => {
+    it("describes producers", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, topics, tagged
+      w.writeInt32(0)
+      w.writeUnsignedVarInt(2) // 1 topic + 1
+      w.writeCompactString("test-topic")
+      w.writeUnsignedVarInt(2) // 1 partition + 1
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(1) // 0 producers
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeProducers({
+        topics: [{ name: "test-topic", partitionIndexes: [0] }]
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe("test-topic")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeTransactions
+  // -------------------------------------------------------------------------
+
+  describe("describeTransactions", () => {
+    it("describes transactions", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, states, tagged
+      w.writeInt32(0)
+      w.writeUnsignedVarInt(2) // 1 state + 1
+      w.writeInt16(0)
+      w.writeCompactString("txn-1")
+      w.writeCompactString("Ongoing")
+      w.writeInt32(60000)
+      w.writeInt64(1000n)
+      w.writeInt64(500n)
+      w.writeInt16(1)
+      w.writeUnsignedVarInt(1) // 0 topics
+      w.writeTaggedFields([])
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeTransactions({
+        transactionalIds: ["txn-1"]
+      })
+      expect(result).toHaveLength(1)
+      expect(result[0].transactionalId).toBe("txn-1")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // listTransactions
+  // -------------------------------------------------------------------------
+
+  describe("listTransactions", () => {
+    it("lists transactions", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, error_code, unknown_state_filters, states, tagged
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeUnsignedVarInt(1) // 0 unknown filters
+      w.writeUnsignedVarInt(1) // 0 states
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.listTransactions()
+      expect(result.errorCode).toBe(0)
+      expect(result.transactionStates).toHaveLength(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeTopicPartitions
+  // -------------------------------------------------------------------------
+
+  describe("describeTopicPartitions", () => {
+    it("describes topic partitions", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, topics, cursor, tagged
+      w.writeInt32(0)
+      w.writeUnsignedVarInt(1) // 0 topics
+      w.writeInt8(-1) // null cursor
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeTopicPartitions({
+        topics: [{ name: "test" }],
+        responsePartitionLimit: 100
+      })
+      expect(result.topics).toHaveLength(0)
+      expect(result.nextCursor).toBeNull()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // updateFeatures
+  // -------------------------------------------------------------------------
+
+  describe("updateFeatures", () => {
+    it("updates features", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: throttle, error_code, error_message, results, tagged
+      w.writeInt32(0)
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(1) // 0 results
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.updateFeatures({
+        timeoutMs: 30000,
+        featureUpdates: []
+      })
+      expect(result.errorCode).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // describeQuorum
+  // -------------------------------------------------------------------------
+
+  describe("describeQuorum", () => {
+    it("describes the quorum", async () => {
+      const w = new BinaryWriter()
+      // v0 flexible: error_code, error_message, topics, tagged
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(1) // 0 topics
+      w.writeTaggedFields([])
+
+      const conn = createMockConnection([buildApiVersionsBody(STANDARD_APIS), w.finish()])
+      const pool = poolWithConn(conn)
+      const admin = new KafkaAdmin({ connectionPool: pool })
+
+      const result = await admin.describeQuorum({
+        topics: []
+      })
+      expect(result.errorCode).toBe(0)
+      expect(result.topics).toHaveLength(0)
     })
   })
 

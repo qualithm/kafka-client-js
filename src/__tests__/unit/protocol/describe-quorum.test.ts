@@ -220,4 +220,195 @@ describe("decodeDescribeQuorumResponse", () => {
     expect(result.value.nodes[0].listeners[0].host).toBe("broker1.example.com")
     expect(result.value.nodes[0].listeners[0].port).toBe(9093)
   })
+
+  it("decodes v0 response with multiple voters and observers", () => {
+    const w = new BinaryWriter()
+    w.writeInt16(0) // error_code
+    w.writeCompactString(null) // error_message
+    w.writeUnsignedVarInt(2) // 1 topic + 1
+    w.writeCompactString("__cluster_metadata")
+    w.writeUnsignedVarInt(2) // 1 partition + 1
+    w.writeInt16(0) // error_code
+    w.writeInt32(0) // partition_index
+    w.writeInt32(1) // leader_id
+    w.writeInt32(3) // leader_epoch
+    w.writeInt64(200n) // high_watermark
+    // 3 voters
+    w.writeUnsignedVarInt(4)
+    for (const [id, offset] of [
+      [1, 200n],
+      [2, 195n],
+      [3, 198n]
+    ] as const) {
+      w.writeInt32(id)
+      w.writeInt64(offset)
+      w.writeTaggedFields([])
+    }
+    // 2 observers
+    w.writeUnsignedVarInt(3)
+    for (const [id, offset] of [
+      [4, 180n],
+      [5, 175n]
+    ] as const) {
+      w.writeInt32(id)
+      w.writeInt64(offset)
+      w.writeTaggedFields([])
+    }
+    w.writeTaggedFields([]) // partition tagged
+    w.writeTaggedFields([]) // topic tagged
+    w.writeTaggedFields([]) // response tagged
+
+    const body = w.finish()
+    const reader = new BinaryReader(body)
+    const result = decodeDescribeQuorumResponse(reader, 0)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    const part = result.value.topics[0].partitions[0]
+    expect(part.currentVoters).toHaveLength(3)
+    expect(part.currentVoters[0].replicaId).toBe(1)
+    expect(part.currentVoters[2].logEndOffset).toBe(198n)
+    expect(part.observers).toHaveLength(2)
+    expect(part.observers[1].replicaId).toBe(5)
+  })
+
+  it("decodes v1 response with multiple nodes and listeners", () => {
+    const w = new BinaryWriter()
+    w.writeInt16(0)
+    w.writeCompactString(null)
+    w.writeUnsignedVarInt(2) // 1 topic + 1
+    w.writeCompactString("__cluster_metadata")
+    w.writeUnsignedVarInt(2)
+    w.writeInt16(0)
+    w.writeInt32(0)
+    w.writeInt32(1)
+    w.writeInt32(1)
+    w.writeInt64(50n)
+    // 1 voter
+    w.writeUnsignedVarInt(2)
+    w.writeInt32(1)
+    w.writeInt64(50n)
+    w.writeInt64(1000n)
+    w.writeInt64(2000n)
+    w.writeTaggedFields([])
+    // 0 observers
+    w.writeUnsignedVarInt(1)
+    w.writeTaggedFields([])
+    w.writeTaggedFields([])
+    // 2 nodes
+    w.writeUnsignedVarInt(3)
+    // node 1 with 2 listeners
+    w.writeInt32(1)
+    w.writeUnsignedVarInt(3) // 2 listeners + 1
+    w.writeCompactString("CONTROLLER")
+    w.writeCompactString("host1")
+    w.writeInt16(9093)
+    w.writeTaggedFields([])
+    w.writeCompactString("BROKER")
+    w.writeCompactString("host1")
+    w.writeInt16(9092)
+    w.writeTaggedFields([])
+    w.writeTaggedFields([]) // node tagged
+    // node 2 with 1 listener
+    w.writeInt32(2)
+    w.writeUnsignedVarInt(2) // 1 listener + 1
+    w.writeCompactString("BROKER")
+    w.writeCompactString("host2")
+    w.writeInt16(9092)
+    w.writeTaggedFields([])
+    w.writeTaggedFields([])
+    w.writeTaggedFields([]) // response tagged
+
+    const body = w.finish()
+    const reader = new BinaryReader(body)
+    const result = decodeDescribeQuorumResponse(reader, 1)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    expect(result.value.nodes).toHaveLength(2)
+    expect(result.value.nodes[0].listeners).toHaveLength(2)
+    expect(result.value.nodes[0].listeners[0].name).toBe("CONTROLLER")
+    expect(result.value.nodes[0].listeners[1].name).toBe("BROKER")
+    expect(result.value.nodes[1].nodeId).toBe(2)
+  })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(1))
+      const result = decodeDescribeQuorumResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated partition entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt16(0) // error_code
+      w.writeCompactString(null) // error_message
+      w.writeUnsignedVarInt(2) // 1 topic + 1
+      w.writeCompactString("__cluster_metadata")
+      w.writeUnsignedVarInt(2) // 1 partition + 1
+      w.writeInt16(0) // error_code
+      w.writeInt32(0) // partition_index
+      // Missing leader_id and beyond
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeQuorumResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v1 replica timestamps", () => {
+      const w = new BinaryWriter()
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(2)
+      w.writeCompactString("__cluster_metadata")
+      w.writeUnsignedVarInt(2)
+      w.writeInt16(0)
+      w.writeInt32(0)
+      w.writeInt32(1)
+      w.writeInt32(1)
+      w.writeInt64(50n)
+      w.writeUnsignedVarInt(2) // 1 voter
+      w.writeInt32(1) // replica_id
+      w.writeInt64(50n) // log_end_offset
+      // Missing last_caught_up_timestamp and last_fetch_timestamp for v1
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeQuorumResponse(reader, 1)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated v1 nodes array", () => {
+      const w = new BinaryWriter()
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(1) // 0 topics
+      // Missing nodes array for v1
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeQuorumResponse(reader, 1)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated listener entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt16(0)
+      w.writeCompactString(null)
+      w.writeUnsignedVarInt(1) // 0 topics
+      w.writeUnsignedVarInt(2) // 1 node + 1
+      w.writeInt32(1) // node_id
+      w.writeUnsignedVarInt(2) // 1 listener + 1
+      w.writeCompactString("CONTROLLER") // name
+      // Missing host and port
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeQuorumResponse(reader, 1)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

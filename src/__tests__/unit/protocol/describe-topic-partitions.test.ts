@@ -225,4 +225,118 @@ describe("decodeDescribeTopicPartitionsResponse", () => {
     expect(result.value.nextCursor?.topicName).toBe("topic-a")
     expect(result.value.nextCursor?.partitionIndex).toBe(5)
   })
+
+  it("decodes response with multiple topics and partitions", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    // 2 topics + 1
+    w.writeUnsignedVarInt(3)
+
+    // topic 1 with 2 partitions
+    w.writeInt16(0) // error_code
+    w.writeCompactString("topic-1")
+    const uuid1 = new Uint8Array(16)
+    uuid1[0] = 0xaa
+    w.writeRawBytes(uuid1)
+    w.writeBoolean(false) // is_internal
+    w.writeUnsignedVarInt(3) // 2 partitions + 1
+    for (const partIdx of [0, 1]) {
+      w.writeInt16(0)
+      w.writeInt32(partIdx)
+      w.writeInt32(1)
+      w.writeInt32(3)
+      w.writeUnsignedVarInt(3) // 2 replicas
+      w.writeInt32(1)
+      w.writeInt32(2)
+      w.writeUnsignedVarInt(3) // 2 isr
+      w.writeInt32(1)
+      w.writeInt32(2)
+      w.writeUnsignedVarInt(1) // 0 elr
+      w.writeUnsignedVarInt(1) // 0 last_elr
+      w.writeUnsignedVarInt(1) // 0 offline
+      w.writeTaggedFields([])
+    }
+    w.writeInt32(0) // topic_authorized_operations
+    w.writeTaggedFields([])
+
+    // topic 2 with error
+    w.writeInt16(3) // UNKNOWN_TOPIC_OR_PARTITION
+    w.writeCompactString("topic-2")
+    const uuid2 = new Uint8Array(16)
+    w.writeRawBytes(uuid2)
+    w.writeBoolean(false)
+    w.writeUnsignedVarInt(1) // 0 partitions
+    w.writeInt32(-2147483648)
+    w.writeTaggedFields([])
+
+    // no cursor
+    w.writeInt8(-1)
+    w.writeTaggedFields([])
+
+    const body = w.finish()
+    const reader = new BinaryReader(body)
+    const result = decodeDescribeTopicPartitionsResponse(reader, 0)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    expect(result.value.topics).toHaveLength(2)
+    expect(result.value.topics[0].partitions).toHaveLength(2)
+    expect(result.value.topics[0].partitions[1].partitionIndex).toBe(1)
+    expect(result.value.topics[1].errorCode).toBe(3)
+    expect(result.value.topics[1].partitions).toHaveLength(0)
+  })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeDescribeTopicPartitionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated topic entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2) // 1 topic + 1
+      w.writeInt16(0) // error_code
+      w.writeCompactString("topic-x")
+      // Missing UUID and the rest
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeTopicPartitionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated partition entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2)
+      w.writeInt16(0)
+      w.writeCompactString("topic-x")
+      w.writeRawBytes(new Uint8Array(16))
+      w.writeBoolean(false)
+      w.writeUnsignedVarInt(2) // 1 partition + 1
+      w.writeInt16(0) // error_code
+      w.writeInt32(0) // partition_index
+      // Missing leader_id and beyond
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeTopicPartitionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated cursor", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(1) // 0 topics
+      w.writeInt8(0) // non-null cursor
+      // Missing cursor topic name and partition
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeTopicPartitionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

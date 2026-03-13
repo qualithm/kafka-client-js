@@ -149,4 +149,103 @@ describe("decodeDescribeTransactionsResponse", () => {
     expect(result.value.throttleTimeMs).toBe(5)
     expect(result.value.transactionStates).toHaveLength(0)
   })
+
+  it("decodes response with multiple transactions and topics", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    // 2 states + 1
+    w.writeUnsignedVarInt(3)
+
+    // state 1 with 2 topics
+    w.writeInt16(0)
+    w.writeCompactString("txn-a")
+    w.writeCompactString("PrepareCommit")
+    w.writeInt32(30000)
+    w.writeInt64(1000n)
+    w.writeInt64(500n)
+    w.writeInt16(2)
+    w.writeUnsignedVarInt(3) // 2 topics + 1
+    w.writeCompactString("t1")
+    w.writeUnsignedVarInt(3) // 2 partitions + 1
+    w.writeInt32(0)
+    w.writeInt32(1)
+    w.writeTaggedFields([])
+    w.writeCompactString("t2")
+    w.writeUnsignedVarInt(2) // 1 partition + 1
+    w.writeInt32(0)
+    w.writeTaggedFields([])
+    w.writeTaggedFields([])
+
+    // state 2 with error
+    w.writeInt16(47) // TRANSACTIONAL_ID_NOT_FOUND
+    w.writeCompactString("txn-b")
+    w.writeCompactString("")
+    w.writeInt32(0)
+    w.writeInt64(0n)
+    w.writeInt64(-1n)
+    w.writeInt16(0)
+    w.writeUnsignedVarInt(1) // 0 topics
+    w.writeTaggedFields([])
+
+    w.writeTaggedFields([]) // response tagged
+
+    const body = w.finish()
+    const reader = new BinaryReader(body)
+    const result = decodeDescribeTransactionsResponse(reader, 0)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    expect(result.value.transactionStates).toHaveLength(2)
+    expect(result.value.transactionStates[0].state).toBe("PrepareCommit")
+    expect(result.value.transactionStates[0].topics).toHaveLength(2)
+    expect(result.value.transactionStates[0].topics[0].partitions).toEqual([0, 1])
+    expect(result.value.transactionStates[0].topics[1].topic).toBe("t2")
+    expect(result.value.transactionStates[1].errorCode).toBe(47)
+  })
+
+  describe("error handling", () => {
+    it("returns failure on truncated input", () => {
+      const reader = new BinaryReader(new Uint8Array(2))
+      const result = decodeDescribeTransactionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated transaction state", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeUnsignedVarInt(2) // 1 state + 1
+      w.writeInt16(0) // error_code
+      w.writeCompactString("txn-1") // transactional_id
+      w.writeCompactString("Ongoing") // state
+      w.writeInt32(60000) // transaction_timeout_ms
+      // Missing start_time and beyond
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeTransactionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure on truncated topic partition entry", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0)
+      w.writeUnsignedVarInt(2)
+      w.writeInt16(0)
+      w.writeCompactString("txn-1")
+      w.writeCompactString("Ongoing")
+      w.writeInt32(60000)
+      w.writeInt64(1000n)
+      w.writeInt64(500n)
+      w.writeInt16(1)
+      w.writeUnsignedVarInt(2) // 1 topic + 1
+      w.writeCompactString("test-topic")
+      // Missing partitions array
+
+      const reader = new BinaryReader(w.finish())
+      const result = decodeDescribeTransactionsResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

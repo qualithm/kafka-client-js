@@ -234,4 +234,47 @@ describe("decodeDescribeUserScramCredentialsResponse", () => {
     const result = decodeDescribeUserScramCredentialsResponse(reader, 0)
     expect(result.ok).toBe(false)
   })
+
+  it("returns failure on truncated result entry", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(0) // error_code
+    w.writeCompactString(null) // error_message
+    w.writeUnsignedVarInt(2) // results array (1 entry)
+    w.writeCompactString("alice") // user
+    w.writeInt16(0) // error_code
+    // error_message missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeDescribeUserScramCredentialsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns failure on truncated credential info", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(0) // error_code
+    w.writeCompactString(null) // error_message
+    w.writeUnsignedVarInt(2) // results array (1 entry)
+    w.writeCompactString("alice") // user
+    w.writeInt16(0) // error_code
+    w.writeCompactString(null) // error_message
+    w.writeUnsignedVarInt(2) // credential_infos (1 entry)
+    w.writeInt8(1) // mechanism — but iterations missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeDescribeUserScramCredentialsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns failure on truncated error_message field", () => {
+    const w = new BinaryWriter()
+    w.writeInt32(0) // throttle_time_ms
+    w.writeInt16(0) // error_code
+    // error_message missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeDescribeUserScramCredentialsResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
 })

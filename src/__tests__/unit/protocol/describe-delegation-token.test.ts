@@ -375,4 +375,40 @@ describe("decodeDescribeDelegationTokenResponse", () => {
     const result = decodeDescribeDelegationTokenResponse(reader, 0)
     expect(result.ok).toBe(false)
   })
+
+  it("returns failure on truncated token entry", () => {
+    const w = new BinaryWriter()
+    w.writeInt16(0) // error_code
+    w.writeInt32(1) // tokens array (1 entry)
+    w.writeString("User") // principal_type — but principal_name missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeDescribeDelegationTokenResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns failure on truncated token timestamps", () => {
+    const w = new BinaryWriter()
+    w.writeInt16(0) // error_code
+    w.writeInt32(1) // tokens array (1 entry)
+    w.writeString("User") // principal_type
+    w.writeString("alice") // principal_name
+    // issue_timestamp_ms missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeDescribeDelegationTokenResponse(reader, 0)
+    expect(result.ok).toBe(false)
+  })
+
+  it("returns failure on truncated v2 token entry", () => {
+    const w = new BinaryWriter()
+    w.writeInt16(0) // error_code
+    w.writeUnsignedVarInt(2) // tokens compact array (1 entry)
+    w.writeCompactString("User") // principal_type
+    // principal_name missing
+    const buf = w.finish()
+    const reader = new BinaryReader(buf)
+    const result = decodeDescribeDelegationTokenResponse(reader, 2)
+    expect(result.ok).toBe(false)
+  })
 })
