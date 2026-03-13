@@ -953,3 +953,18 @@ export {
   decodeConsumerGroupHeartbeatResponse,
   encodeConsumerGroupHeartbeatRequest
 } from "./protocol/consumer-group-heartbeat.js"
+
+// ConsumerGroupDescribe API
+export type {
+  ConsumerGroupDescribeAssignment,
+  ConsumerGroupDescribeGroup,
+  ConsumerGroupDescribeMember,
+  ConsumerGroupDescribeRequest,
+  ConsumerGroupDescribeResponse,
+  ConsumerGroupDescribeTopicPartition
+} from "./protocol/consumer-group-describe.js"
+export {
+  buildConsumerGroupDescribeRequest,
+  decodeConsumerGroupDescribeResponse,
+  encodeConsumerGroupDescribeRequest
+} from "./protocol/consumer-group-describe.js"
