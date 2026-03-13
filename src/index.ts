@@ -939,3 +939,17 @@ export {
   decodeDescribeQuorumResponse,
   encodeDescribeQuorumRequest
 } from "./protocol/describe-quorum.js"
+
+// ConsumerGroupHeartbeat API
+export type {
+  ConsumerGroupHeartbeatAssignment,
+  ConsumerGroupHeartbeatRequest,
+  ConsumerGroupHeartbeatRequestTopicPartition,
+  ConsumerGroupHeartbeatResponse,
+  ConsumerGroupHeartbeatResponseTopicPartition
+} from "./protocol/consumer-group-heartbeat.js"
+export {
+  buildConsumerGroupHeartbeatRequest,
+  decodeConsumerGroupHeartbeatResponse,
+  encodeConsumerGroupHeartbeatRequest
+} from "./protocol/consumer-group-heartbeat.js"
