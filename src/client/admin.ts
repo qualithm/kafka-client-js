@@ -103,6 +103,12 @@ import {
   encodeDescribeClientQuotasRequest
 } from "../protocol/describe-client-quotas.js"
 import {
+  decodeDescribeClusterResponse,
+  type DescribeClusterRequest,
+  type DescribeClusterResponse,
+  encodeDescribeClusterRequest
+} from "../protocol/describe-cluster.js"
+import {
   decodeDescribeConfigsResponse,
   type DescribeConfigsRequest,
   type DescribeConfigsResourceResponse,
@@ -126,6 +132,30 @@ import {
   type DescribeLogDirsResult,
   encodeDescribeLogDirsRequest
 } from "../protocol/describe-log-dirs.js"
+import {
+  decodeDescribeProducersResponse,
+  type DescribeProducersRequest,
+  type DescribeProducersTopicResponse,
+  encodeDescribeProducersRequest
+} from "../protocol/describe-producers.js"
+import {
+  decodeDescribeQuorumResponse,
+  type DescribeQuorumRequest,
+  type DescribeQuorumResponse,
+  encodeDescribeQuorumRequest
+} from "../protocol/describe-quorum.js"
+import {
+  decodeDescribeTopicPartitionsResponse,
+  type DescribeTopicPartitionsRequest,
+  type DescribeTopicPartitionsResponse,
+  encodeDescribeTopicPartitionsRequest
+} from "../protocol/describe-topic-partitions.js"
+import {
+  decodeDescribeTransactionsResponse,
+  type DescribeTransactionsRequest,
+  encodeDescribeTransactionsRequest,
+  type TransactionState
+} from "../protocol/describe-transactions.js"
 import {
   decodeDescribeUserScramCredentialsResponse,
   type DescribeUserScramCredentialsRequest,
@@ -163,6 +193,12 @@ import {
   type OngoingTopicReassignment
 } from "../protocol/list-partition-reassignments.js"
 import {
+  decodeListTransactionsResponse,
+  encodeListTransactionsRequest,
+  type ListTransactionsRequest,
+  type ListTransactionsResponse
+} from "../protocol/list-transactions.js"
+import {
   decodeMetadataResponse,
   encodeMetadataRequest,
   type MetadataRequest,
@@ -174,6 +210,12 @@ import {
   type RenewDelegationTokenRequest,
   type RenewDelegationTokenResponse
 } from "../protocol/renew-delegation-token.js"
+import {
+  decodeUpdateFeaturesResponse,
+  encodeUpdateFeaturesRequest,
+  type UpdateFeaturesRequest,
+  type UpdateFeaturesResponse
+} from "../protocol/update-features.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1243,6 +1285,233 @@ export class KafkaAdmin {
         }
 
         return result.value.results
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe the cluster including broker endpoints and authorised operations.
+   *
+   * @param request - The DescribeCluster request payload.
+   * @returns The cluster description.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeCluster(request: DescribeClusterRequest): Promise<DescribeClusterResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeCluster)
+      try {
+        const responseReader = await conn.send(ApiKey.DescribeCluster, apiVersion, (writer) => {
+          encodeDescribeClusterRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDescribeClusterResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe cluster response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe active producers on specified topic partitions.
+   *
+   * @param request - The DescribeProducers request payload.
+   * @returns Per-topic producer results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeProducers(
+    request: DescribeProducersRequest
+  ): Promise<readonly DescribeProducersTopicResponse[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeProducers)
+      try {
+        const responseReader = await conn.send(ApiKey.DescribeProducers, apiVersion, (writer) => {
+          encodeDescribeProducersRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDescribeProducersResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe producers response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.topics
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe the state of active transactions by transactional ID.
+   *
+   * @param request - The DescribeTransactions request payload.
+   * @returns Per-transaction state results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeTransactions(
+    request: DescribeTransactionsRequest
+  ): Promise<readonly TransactionState[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeTransactions)
+      try {
+        const responseReader = await conn.send(
+          ApiKey.DescribeTransactions,
+          apiVersion,
+          (writer) => {
+            encodeDescribeTransactionsRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeDescribeTransactionsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe transactions response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.transactionStates
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * List active transactions on the broker.
+   *
+   * @param request - The ListTransactions request payload. Pass `{}` for no filter.
+   * @returns The list transactions response including error code and transaction states.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async listTransactions(request: ListTransactionsRequest = {}): Promise<ListTransactionsResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.ListTransactions)
+      try {
+        const responseReader = await conn.send(ApiKey.ListTransactions, apiVersion, (writer) => {
+          encodeListTransactionsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeListTransactionsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode list transactions response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe topic partitions with pagination support.
+   *
+   * Designed for large clusters where the standard Metadata API may be too
+   * heavy. Supports cursored pagination via `responsePartitionLimit` and `cursor`.
+   *
+   * @param request - The DescribeTopicPartitions request payload.
+   * @returns The response including topic partitions and next cursor.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeTopicPartitions(
+    request: DescribeTopicPartitionsRequest
+  ): Promise<DescribeTopicPartitionsResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeTopicPartitions)
+      try {
+        const responseReader = await conn.send(
+          ApiKey.DescribeTopicPartitions,
+          apiVersion,
+          (writer) => {
+            encodeDescribeTopicPartitionsRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeDescribeTopicPartitionsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe topic partitions response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Update finalized feature flags in the cluster.
+   *
+   * @param request - The UpdateFeatures request payload.
+   * @returns The update features response.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async updateFeatures(request: UpdateFeaturesRequest): Promise<UpdateFeaturesResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(ApiKey.UpdateFeatures)
+      try {
+        const responseReader = await conn.send(ApiKey.UpdateFeatures, apiVersion, (writer) => {
+          encodeUpdateFeaturesRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeUpdateFeaturesResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode update features response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe the KRaft quorum state for controller partitions.
+   *
+   * @param request - The DescribeQuorum request payload.
+   * @returns The quorum description.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeQuorum(request: DescribeQuorumRequest): Promise<DescribeQuorumResponse> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeQuorum)
+      try {
+        const responseReader = await conn.send(ApiKey.DescribeQuorum, apiVersion, (writer) => {
+          encodeDescribeQuorumRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDescribeQuorumResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe quorum response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value
       } finally {
         this.pool.releaseConnection(conn)
       }

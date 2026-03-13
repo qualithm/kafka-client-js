@@ -841,3 +841,101 @@ export {
   decodeAlterReplicaLogDirsResponse,
   encodeAlterReplicaLogDirsRequest
 } from "./protocol/alter-replica-log-dirs.js"
+
+// DescribeCluster API
+export type {
+  DescribeClusterBroker,
+  DescribeClusterRequest,
+  DescribeClusterResponse
+} from "./protocol/describe-cluster.js"
+export {
+  buildDescribeClusterRequest,
+  decodeDescribeClusterResponse,
+  encodeDescribeClusterRequest
+} from "./protocol/describe-cluster.js"
+
+// DescribeProducers API
+export type {
+  DescribeProducersPartitionResponse,
+  DescribeProducersRequest,
+  DescribeProducersResponse,
+  DescribeProducersTopicRequest,
+  DescribeProducersTopicResponse,
+  ProducerState
+} from "./protocol/describe-producers.js"
+export {
+  buildDescribeProducersRequest,
+  decodeDescribeProducersResponse,
+  encodeDescribeProducersRequest
+} from "./protocol/describe-producers.js"
+
+// DescribeTransactions API
+export type {
+  DescribeTransactionsRequest,
+  DescribeTransactionsResponse,
+  TransactionState,
+  TransactionTopicPartition
+} from "./protocol/describe-transactions.js"
+export {
+  buildDescribeTransactionsRequest,
+  decodeDescribeTransactionsResponse,
+  encodeDescribeTransactionsRequest
+} from "./protocol/describe-transactions.js"
+
+// ListTransactions API
+export type {
+  ListedTransaction,
+  ListTransactionsRequest,
+  ListTransactionsResponse
+} from "./protocol/list-transactions.js"
+export {
+  buildListTransactionsRequest,
+  decodeListTransactionsResponse,
+  encodeListTransactionsRequest
+} from "./protocol/list-transactions.js"
+
+// DescribeTopicPartitions API
+export type {
+  DescribeTopicPartitionsPartitionResponse,
+  DescribeTopicPartitionsRequest,
+  DescribeTopicPartitionsResponse,
+  DescribeTopicPartitionsTopicRequest,
+  DescribeTopicPartitionsTopicResponse,
+  TopicPartitionsCursor
+} from "./protocol/describe-topic-partitions.js"
+export {
+  buildDescribeTopicPartitionsRequest,
+  decodeDescribeTopicPartitionsResponse,
+  encodeDescribeTopicPartitionsRequest
+} from "./protocol/describe-topic-partitions.js"
+
+// UpdateFeatures API
+export type {
+  FeatureUpdateKey,
+  UpdatableFeatureResult,
+  UpdateFeaturesRequest,
+  UpdateFeaturesResponse
+} from "./protocol/update-features.js"
+export {
+  buildUpdateFeaturesRequest,
+  decodeUpdateFeaturesResponse,
+  encodeUpdateFeaturesRequest
+} from "./protocol/update-features.js"
+
+// DescribeQuorum API
+export type {
+  DescribeQuorumPartitionRequest,
+  DescribeQuorumPartitionResponse,
+  DescribeQuorumRequest,
+  DescribeQuorumResponse,
+  DescribeQuorumTopicRequest,
+  DescribeQuorumTopicResponse,
+  QuorumNode,
+  QuorumNodeListener,
+  ReplicaState
+} from "./protocol/describe-quorum.js"
+export {
+  buildDescribeQuorumRequest,
+  decodeDescribeQuorumResponse,
+  encodeDescribeQuorumRequest
+} from "./protocol/describe-quorum.js"

@@ -65,7 +65,14 @@ export const ApiKey = {
   DescribeClientQuotas: 48,
   AlterClientQuotas: 49,
   DescribeUserScramCredentials: 50,
-  AlterUserScramCredentials: 51
+  AlterUserScramCredentials: 51,
+  DescribeQuorum: 55,
+  UpdateFeatures: 57,
+  DescribeCluster: 60,
+  DescribeProducers: 61,
+  DescribeTransactions: 65,
+  ListTransactions: 66,
+  DescribeTopicPartitions: 75
 } as const
 
 export type ApiKey = (typeof ApiKey)[keyof typeof ApiKey]
@@ -150,7 +157,14 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.DescribeUserScramCredentials]: { minVersion: 0, maxVersion: 0 },
   [ApiKey.AlterUserScramCredentials]: { minVersion: 0, maxVersion: 0 },
   [ApiKey.AlterReplicaLogDirs]: { minVersion: 0, maxVersion: 2 },
-  [ApiKey.DescribeLogDirs]: { minVersion: 0, maxVersion: 4 }
+  [ApiKey.DescribeLogDirs]: { minVersion: 0, maxVersion: 4 },
+  [ApiKey.DescribeQuorum]: { minVersion: 0, maxVersion: 1 },
+  [ApiKey.UpdateFeatures]: { minVersion: 0, maxVersion: 1 },
+  [ApiKey.DescribeCluster]: { minVersion: 0, maxVersion: 1 },
+  [ApiKey.DescribeProducers]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.DescribeTransactions]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.ListTransactions]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.DescribeTopicPartitions]: { minVersion: 0, maxVersion: 0 }
 }
 
 /**
@@ -205,7 +219,14 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.DescribeUserScramCredentials]: 0,
   [ApiKey.AlterUserScramCredentials]: 0,
   [ApiKey.AlterReplicaLogDirs]: 2,
-  [ApiKey.DescribeLogDirs]: 2
+  [ApiKey.DescribeLogDirs]: 2,
+  [ApiKey.DescribeQuorum]: 0,
+  [ApiKey.UpdateFeatures]: 0,
+  [ApiKey.DescribeCluster]: 0,
+  [ApiKey.DescribeProducers]: 0,
+  [ApiKey.DescribeTransactions]: 0,
+  [ApiKey.ListTransactions]: 0,
+  [ApiKey.DescribeTopicPartitions]: 0
 }
 
 /**
