@@ -74,6 +74,8 @@ export const ApiKey = {
   ListTransactions: 66,
   ConsumerGroupHeartbeat: 68,
   ConsumerGroupDescribe: 69,
+  GetTelemetrySubscriptions: 71,
+  PushTelemetry: 72,
   DescribeTopicPartitions: 75
 } as const
 
@@ -168,6 +170,8 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.ListTransactions]: { minVersion: 0, maxVersion: 0 },
   [ApiKey.ConsumerGroupHeartbeat]: { minVersion: 0, maxVersion: 0 },
   [ApiKey.ConsumerGroupDescribe]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.GetTelemetrySubscriptions]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.PushTelemetry]: { minVersion: 0, maxVersion: 0 },
   [ApiKey.DescribeTopicPartitions]: { minVersion: 0, maxVersion: 0 }
 }
 
@@ -232,6 +236,8 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.ListTransactions]: 0,
   [ApiKey.ConsumerGroupHeartbeat]: 0,
   [ApiKey.ConsumerGroupDescribe]: 0,
+  [ApiKey.GetTelemetrySubscriptions]: 0,
+  [ApiKey.PushTelemetry]: 0,
   [ApiKey.DescribeTopicPartitions]: 0
 }
 

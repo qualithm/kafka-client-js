@@ -973,3 +973,22 @@ export {
   decodeConsumerGroupDescribeResponse,
   encodeConsumerGroupDescribeRequest
 } from "./protocol/consumer-group-describe.js"
+
+// GetTelemetrySubscriptions API
+export type {
+  GetTelemetrySubscriptionsRequest,
+  GetTelemetrySubscriptionsResponse
+} from "./protocol/get-telemetry-subscriptions.js"
+export {
+  buildGetTelemetrySubscriptionsRequest,
+  decodeGetTelemetrySubscriptionsResponse,
+  encodeGetTelemetrySubscriptionsRequest
+} from "./protocol/get-telemetry-subscriptions.js"
+
+// PushTelemetry API
+export type { PushTelemetryRequest, PushTelemetryResponse } from "./protocol/push-telemetry.js"
+export {
+  buildPushTelemetryRequest,
+  decodePushTelemetryResponse,
+  encodePushTelemetryRequest
+} from "./protocol/push-telemetry.js"
