@@ -811,3 +811,33 @@ export {
   decodeAlterClientQuotasResponse,
   encodeAlterClientQuotasRequest
 } from "./protocol/alter-client-quotas.js"
+
+// DescribeLogDirs API
+export type {
+  DescribeLogDirsPartition,
+  DescribeLogDirsRequest,
+  DescribeLogDirsResponse,
+  DescribeLogDirsResult,
+  DescribeLogDirsTopic,
+  DescribeLogDirsTopicResponse
+} from "./protocol/describe-log-dirs.js"
+export {
+  buildDescribeLogDirsRequest,
+  decodeDescribeLogDirsResponse,
+  encodeDescribeLogDirsRequest
+} from "./protocol/describe-log-dirs.js"
+
+// AlterReplicaLogDirs API
+export type {
+  AlterReplicaLogDirsEntry,
+  AlterReplicaLogDirsPartitionResponse,
+  AlterReplicaLogDirsRequest,
+  AlterReplicaLogDirsResponse,
+  AlterReplicaLogDirsTopic,
+  AlterReplicaLogDirsTopicResponse
+} from "./protocol/alter-replica-log-dirs.js"
+export {
+  buildAlterReplicaLogDirsRequest,
+  decodeAlterReplicaLogDirsResponse,
+  encodeAlterReplicaLogDirsRequest
+} from "./protocol/alter-replica-log-dirs.js"

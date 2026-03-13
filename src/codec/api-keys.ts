@@ -148,7 +148,9 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
   [ApiKey.DescribeClientQuotas]: { minVersion: 0, maxVersion: 1 },
   [ApiKey.AlterClientQuotas]: { minVersion: 0, maxVersion: 1 },
   [ApiKey.DescribeUserScramCredentials]: { minVersion: 0, maxVersion: 0 },
-  [ApiKey.AlterUserScramCredentials]: { minVersion: 0, maxVersion: 0 }
+  [ApiKey.AlterUserScramCredentials]: { minVersion: 0, maxVersion: 0 },
+  [ApiKey.AlterReplicaLogDirs]: { minVersion: 0, maxVersion: 2 },
+  [ApiKey.DescribeLogDirs]: { minVersion: 0, maxVersion: 4 }
 }
 
 /**
@@ -201,7 +203,9 @@ export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>>
   [ApiKey.DescribeClientQuotas]: 1,
   [ApiKey.AlterClientQuotas]: 1,
   [ApiKey.DescribeUserScramCredentials]: 0,
-  [ApiKey.AlterUserScramCredentials]: 0
+  [ApiKey.AlterUserScramCredentials]: 0,
+  [ApiKey.AlterReplicaLogDirs]: 2,
+  [ApiKey.DescribeLogDirs]: 2
 }
 
 /**

@@ -30,6 +30,12 @@ import {
   type ReassignableTopicResponse
 } from "../protocol/alter-partition-reassignments.js"
 import {
+  type AlterReplicaLogDirsRequest,
+  type AlterReplicaLogDirsTopicResponse,
+  decodeAlterReplicaLogDirsResponse,
+  encodeAlterReplicaLogDirsRequest
+} from "../protocol/alter-replica-log-dirs.js"
+import {
   type AlterUserScramCredentialsRequest,
   type AlterUserScramCredentialsResultEntry,
   decodeAlterUserScramCredentialsResponse,
@@ -114,6 +120,12 @@ import {
   type DescribeGroupsRequest,
   encodeDescribeGroupsRequest
 } from "../protocol/describe-groups.js"
+import {
+  decodeDescribeLogDirsResponse,
+  type DescribeLogDirsRequest,
+  type DescribeLogDirsResult,
+  encodeDescribeLogDirsRequest
+} from "../protocol/describe-log-dirs.js"
 import {
   decodeDescribeUserScramCredentialsResponse,
   type DescribeUserScramCredentialsRequest,
@@ -1164,6 +1176,73 @@ export class KafkaAdmin {
         }
 
         return result.value.entries
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Describe log directories on the broker.
+   *
+   * Returns per-log-directory information including topic-partition sizes
+   * and offset lag. Use `null` topics to describe all.
+   *
+   * @param request - The DescribeLogDirs request payload.
+   * @returns Per-log-directory results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async describeLogDirs(
+    request: DescribeLogDirsRequest
+  ): Promise<readonly DescribeLogDirsResult[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.DescribeLogDirs)
+      try {
+        const responseReader = await conn.send(ApiKey.DescribeLogDirs, apiVersion, (writer) => {
+          encodeDescribeLogDirsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeDescribeLogDirsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode describe log dirs response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.results
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Move topic-partition replicas between log directories on a broker.
+   *
+   * @param request - The AlterReplicaLogDirs request payload.
+   * @returns Per-topic results with per-partition error codes.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async alterReplicaLogDirs(
+    request: AlterReplicaLogDirsRequest
+  ): Promise<readonly AlterReplicaLogDirsTopicResponse[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.AlterReplicaLogDirs)
+      try {
+        const responseReader = await conn.send(ApiKey.AlterReplicaLogDirs, apiVersion, (writer) => {
+          encodeAlterReplicaLogDirsRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeAlterReplicaLogDirsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode alter replica log dirs response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.results
       } finally {
         this.pool.releaseConnection(conn)
       }
