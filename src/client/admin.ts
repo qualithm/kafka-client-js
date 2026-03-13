@@ -17,6 +17,12 @@ import {
   decodeAlterConfigsResponse,
   encodeAlterConfigsRequest
 } from "../protocol/alter-configs.js"
+import {
+  type AlterPartitionReassignmentsRequest,
+  decodeAlterPartitionReassignmentsResponse,
+  encodeAlterPartitionReassignmentsRequest,
+  type ReassignableTopicResponse
+} from "../protocol/alter-partition-reassignments.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "../protocol/api-versions.js"
 import {
   type CreatePartitionsRequest,
@@ -61,11 +67,29 @@ import {
   encodeDescribeGroupsRequest
 } from "../protocol/describe-groups.js"
 import {
+  decodeElectLeadersResponse,
+  type ElectLeadersRequest,
+  type ElectLeadersTopicResponse,
+  encodeElectLeadersRequest
+} from "../protocol/elect-leaders.js"
+import {
+  decodeIncrementalAlterConfigsResponse,
+  encodeIncrementalAlterConfigsRequest,
+  type IncrementalAlterConfigsRequest,
+  type IncrementalAlterConfigsResourceResponse
+} from "../protocol/incremental-alter-configs.js"
+import {
   decodeListGroupsResponse,
   encodeListGroupsRequest,
   type ListGroupsGroup,
   type ListGroupsRequest
 } from "../protocol/list-groups.js"
+import {
+  decodeListPartitionReassignmentsResponse,
+  encodeListPartitionReassignmentsRequest,
+  type ListPartitionReassignmentsRequest,
+  type OngoingTopicReassignment
+} from "../protocol/list-partition-reassignments.js"
 import {
   decodeMetadataResponse,
   encodeMetadataRequest,
@@ -523,6 +547,153 @@ export class KafkaAdmin {
         }
 
         return result.value.results
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Trigger a preferred or unclean leader election for specified partitions.
+   *
+   * @param request - The ElectLeaders request payload.
+   * @returns Per-topic/partition election results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async electLeaders(request: ElectLeadersRequest): Promise<readonly ElectLeadersTopicResponse[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(ApiKey.ElectLeaders)
+      try {
+        const responseReader = await conn.send(ApiKey.ElectLeaders, apiVersion, (writer) => {
+          encodeElectLeadersRequest(writer, request, apiVersion)
+        })
+
+        const result = decodeElectLeadersResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode elect leaders response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.replicaElectionResults
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Incrementally alter configuration for specified resources.
+   *
+   * Unlike {@link alterConfigs}, this only modifies the specified config
+   * entries — unmentioned keys are left unchanged.
+   *
+   * @param request - The IncrementalAlterConfigs request payload.
+   * @returns Per-resource results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async incrementalAlterConfigs(
+    request: IncrementalAlterConfigsRequest
+  ): Promise<readonly IncrementalAlterConfigsResourceResponse[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(
+        ApiKey.IncrementalAlterConfigs
+      )
+      try {
+        const responseReader = await conn.send(
+          ApiKey.IncrementalAlterConfigs,
+          apiVersion,
+          (writer) => {
+            encodeIncrementalAlterConfigsRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeIncrementalAlterConfigsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode incremental alter configs response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.responses
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * Initiate, cancel, or modify partition replica reassignments.
+   *
+   * @param request - The AlterPartitionReassignments request payload.
+   * @returns Per-topic/partition reassignment results.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async alterPartitionReassignments(
+    request: AlterPartitionReassignmentsRequest
+  ): Promise<readonly ReassignableTopicResponse[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getControllerConnection(
+        ApiKey.AlterPartitionReassignments
+      )
+      try {
+        const responseReader = await conn.send(
+          ApiKey.AlterPartitionReassignments,
+          apiVersion,
+          (writer) => {
+            encodeAlterPartitionReassignmentsRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeAlterPartitionReassignmentsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode alter partition reassignments response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.responses
+      } finally {
+        this.pool.releaseConnection(conn)
+      }
+    })
+  }
+
+  /**
+   * List ongoing partition replica reassignments.
+   *
+   * @param request - The ListPartitionReassignments request payload.
+   * @returns Per-topic ongoing reassignment state.
+   * @throws {KafkaConnectionError} If connection or version negotiation fails.
+   */
+  async listPartitionReassignments(
+    request: ListPartitionReassignmentsRequest
+  ): Promise<readonly OngoingTopicReassignment[]> {
+    return this.withRetry(async () => {
+      const { conn, apiVersion } = await this.getAnyBrokerConnection(
+        ApiKey.ListPartitionReassignments
+      )
+      try {
+        const responseReader = await conn.send(
+          ApiKey.ListPartitionReassignments,
+          apiVersion,
+          (writer) => {
+            encodeListPartitionReassignmentsRequest(writer, request, apiVersion)
+          }
+        )
+
+        const result = decodeListPartitionReassignmentsResponse(responseReader, apiVersion)
+        if (!result.ok) {
+          throw new KafkaConnectionError(
+            `failed to decode list partition reassignments response: ${result.error.message}`,
+            { broker: conn.broker }
+          )
+        }
+
+        return result.value.topics
       } finally {
         this.pool.releaseConnection(conn)
       }

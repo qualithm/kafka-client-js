@@ -629,3 +629,32 @@ export {
   decodeIncrementalAlterConfigsResponse,
   encodeIncrementalAlterConfigsRequest
 } from "./protocol/incremental-alter-configs.js"
+
+// AlterPartitionReassignments API
+export type {
+  AlterPartitionReassignmentsRequest,
+  AlterPartitionReassignmentsResponse,
+  ReassignablePartition,
+  ReassignablePartitionResponse,
+  ReassignableTopic,
+  ReassignableTopicResponse
+} from "./protocol/alter-partition-reassignments.js"
+export {
+  buildAlterPartitionReassignmentsRequest,
+  decodeAlterPartitionReassignmentsResponse,
+  encodeAlterPartitionReassignmentsRequest
+} from "./protocol/alter-partition-reassignments.js"
+
+// ListPartitionReassignments API
+export type {
+  ListPartitionReassignmentsRequest,
+  ListPartitionReassignmentsResponse,
+  ListReassignmentsTopic,
+  OngoingPartitionReassignment,
+  OngoingTopicReassignment
+} from "./protocol/list-partition-reassignments.js"
+export {
+  buildListPartitionReassignmentsRequest,
+  decodeListPartitionReassignmentsResponse,
+  encodeListPartitionReassignmentsRequest
+} from "./protocol/list-partition-reassignments.js"
