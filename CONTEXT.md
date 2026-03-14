@@ -537,24 +537,3 @@ back to classic protocol for older brokers.
 
 Acceptance: Codecs round-trip correctly, clients can opt in to push metrics to brokers supporting
 KIP-714.
-
----
-
-## Learnings
-
-> Append-only. Never edit or delete existing entries.
-
-| Date       | Learning                                                                                                                                                                                                                                                                                |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-03-06 | TypeScript `override readonly name = "SubclassName"` on Error subclasses causes TS2416 when the base uses a string literal type; declare `name` as `string` in the base class to allow overriding with narrower literals                                                                |
-| 2026-03-06 | BinaryWriter/BinaryReader treat all strings as nullable — `writeString(string \| null)` and `readString(): DecodeResult<string \| null>` — no separate nullable variants needed                                                                                                         |
-| 2026-03-10 | Producer batching with async metadata fetch requires tracking in-flight accumulations (`pendingEnqueues` set) so `flush()` waits for messages to be accumulated before draining; otherwise `flush()` races with `send()` and finds an empty accumulator                                 |
-| 2026-03-10 | Web Crypto API in TypeScript ES2023 lib rejects `Uint8Array<ArrayBufferLike>` as `BufferSource` — use `.buffer.slice(offset, end) as ArrayBuffer` helper to extract a plain `ArrayBuffer` before passing to `crypto.subtle.importKey` / `deriveBits` / `sign` / `digest`                |
-| 2026-03-10 | Schema Registry `register()` caches the schema by ID, so subsequent `getSchema()` calls for the same ID (e.g. during deserialization) are served from cache without an HTTP round-trip; test expectations should account for this                                                       |
-| 2026-03-11 | fast-check v4 removed `fc.char()`; use `fc.string({ minLength, maxLength })` instead of `fc.stringOf(fc.char(), ...)` for arbitrary string generation                                                                                                                                   |
-| 2026-03-11 | Kafka transaction protocol flow: FindCoordinator(TRANSACTION) → InitProducerId → beginTransaction (client-only) → AddPartitionsToTxn (per new topic-partition) → Produce → EndTxn (commit/abort); for consumer offset commit within transaction, also AddOffsetsToTxn → TxnOffsetCommit |
-| 2026-03-11 | Kafka `FLEXIBLE_VERSION_THRESHOLDS` control header encoding, but individual response decoders may switch body format at a different version (e.g. FindCoordinator headers are flexible at v3 but batched response format starts at v4); tests must match the body format version        |
-| 2026-03-12 | Mock-based unit tests for producer/consumer/admin achieve ~80% function coverage because `conn.send(apiKey, version, (writer) => { ... })` writer callbacks are never invoked by the mock; these callbacks are only exercisable via integration tests with a real broker                |
-| 2026-03-12 | Single-broker Kafka docker-compose requires `KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1` and `KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1`; defaults of 3/2 cause `__transaction_state` topic creation to fail with `INVALID_REPLICATION_FACTOR`                                        |
-| 2026-03-12 | DescribeConfigs v3+ added a `config_type` (INT8) field between `synonyms` and `documentation` in each config entry; omitting it shifts the decoder and corrupts all subsequent fields                                                                                                   |
-| 2026-03-12 | `ConnectionPool` with `maxConnectionsPerBroker=1` (default) deadlocks when two consumers from the same `Kafka` instance join the same group: consumer2's JoinGroup holds the connection, consumer1 can't send its JoinGroup, broker blocks until all members rejoin                     |
