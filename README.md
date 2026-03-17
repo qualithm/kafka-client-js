@@ -19,13 +19,34 @@ protocol directly for producing, consuming, and administering Kafka clusters.
 - **Serialisation** — built-in JSON/string, pluggable Avro and Protobuf via Schema Registry
 - **Compression** — gzip, snappy, lz4, zstd
 
-## Quick Start
+## Installation
 
 ```bash
 bun add @qualithm/kafka-client
 # or
 npm install @qualithm/kafka-client
 ```
+
+## Quick Start
+
+```ts
+import { createKafka, createNodeSocketFactory } from "@qualithm/kafka-client"
+
+const kafka = createKafka({
+  config: { brokers: ["localhost:9092"], clientId: "my-app" },
+  socketFactory: createNodeSocketFactory()
+})
+await kafka.connect()
+
+const producer = kafka.producer()
+await producer.send("my-topic", [
+  { key: new TextEncoder().encode("key-1"), value: new TextEncoder().encode("hello") }
+])
+await producer.close()
+await kafka.disconnect()
+```
+
+## Usage
 
 ### Producing Messages
 
@@ -126,15 +147,29 @@ const encoded = await serde.serialize("my-topic", myData)
 const decoded = await serde.deserialize("my-topic", record.message.value!)
 ```
 
-## API Documentation
+## API Reference
 
-Full API reference is generated with [TypeDoc](https://typedoc.org/):
+Full API documentation is generated with [TypeDoc](https://typedoc.org/):
 
 ```bash
 bun run docs
+# Output in docs/
 ```
 
-Output is written to `docs/`.
+## Examples
+
+See the [`examples/`](examples/) directory for runnable examples:
+
+| Example                                               | Description                     |
+| ----------------------------------------------------- | ------------------------------- |
+| [`basic-usage.ts`](examples/basic-usage.ts)           | Connect, produce, and consume   |
+| [`batch-processing.ts`](examples/batch-processing.ts) | Batch produce and consume       |
+| [`produce-consume.ts`](examples/produce-consume.ts)   | End-to-end produce/consume flow |
+| [`error-handling.ts`](examples/error-handling.ts)     | Error handling patterns         |
+
+```bash
+bun run examples/basic-usage.ts
+```
 
 ## Development
 
@@ -157,15 +192,9 @@ bun run build
 ### Testing
 
 ```bash
-# Unit tests
-bun run test:unit
-
-# Integration tests (requires a running broker)
-docker compose up -d
-bun run test:integration
-
-# All tests with coverage
-bun run test:coverage
+bun run test              # unit tests
+bun run test:integration  # integration tests (requires a running broker)
+bun run test:coverage     # with coverage report
 ```
 
 ### Linting & Formatting
