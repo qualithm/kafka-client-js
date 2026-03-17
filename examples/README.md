@@ -1,20 +1,17 @@
 # Examples
 
-This directory contains runnable examples demonstrating Kafka client usage.
+Runnable examples demonstrating Kafka client usage.
+
+## Prerequisites
+
+The `produce-consume` example requires a running Kafka broker (default: `localhost:9092`).
 
 ## Running Examples
 
 ```bash
-# Basic usage — types, broker parsing, version negotiation
 bun run examples/basic-usage.ts
-
-# Error handling — error hierarchy and type narrowing
 bun run examples/error-handling.ts
-
-# Batch processing — constructing and encoding record batches
 bun run examples/batch-processing.ts
-
-# Produce and consume — end-to-end with a live broker
 bun run examples/produce-consume.ts
 ```
 
