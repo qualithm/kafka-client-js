@@ -2,7 +2,7 @@
  * Produce and consume example.
  *
  * Demonstrates end-to-end message flow with a live Kafka broker.
- * Requires a running broker (see docker-compose.yml):
+ * Requires a running broker (see docker-compose.yaml):
  *
  *   docker compose up -d
  *

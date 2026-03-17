@@ -1,7 +1,7 @@
 /**
  * Integration test: SASL/PLAIN and SASL/SCRAM authentication.
  *
- * Requires a SASL-enabled Kafka broker (see docker-compose.yml kafka-sasl profile).
+ * Requires a SASL-enabled Kafka broker (see docker-compose.yaml kafka-sasl profile).
  * Run: `docker compose --profile kafka-sasl up -d` then `KAFKA_SASL_PORT=9094 bun run test:integration:sasl`
  *
  * Tests verify that the client can connect, authenticate, and perform

@@ -4,7 +4,7 @@
  * Tests topic management, partition creation, and config describe/alter
  * against a real Kafka broker.
  *
- * Requires a running Kafka broker (see docker-compose.yml).
+ * Requires a running Kafka broker (see docker-compose.yaml).
  * Run: `docker compose --profile kafka up -d --wait && bun run test:integration`
  */
 

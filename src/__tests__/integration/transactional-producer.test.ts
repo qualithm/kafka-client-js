@@ -4,7 +4,7 @@
  * Tests transaction lifecycle (begin, commit, abort) and verifies
  * isolation semantics with read_committed consumers.
  *
- * Requires a running Kafka broker (see docker-compose.yml).
+ * Requires a running Kafka broker (see docker-compose.yaml).
  * Run: `docker compose --profile kafka up -d --wait && bun run test:integration`
  */
 

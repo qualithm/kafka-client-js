@@ -2,7 +2,7 @@
  * Integration test setup and helpers.
  *
  * Provides a shared Kafka connection for integration tests.
- * Requires a running Kafka broker (see docker-compose.yml).
+ * Requires a running Kafka broker (see docker-compose.yaml).
  *
  * Usage:
  *   import { getBroker, createIntegrationConnection, isKafkaAvailable } from "./setup"

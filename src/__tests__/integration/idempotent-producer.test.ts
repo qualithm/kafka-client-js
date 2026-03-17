@@ -4,7 +4,7 @@
  * Tests that the idempotent producer allocates a producer ID,
  * assigns sequence numbers, and produces messages correctly.
  *
- * Requires a running Kafka broker (see docker-compose.yml).
+ * Requires a running Kafka broker (see docker-compose.yaml).
  * Run: `docker compose --profile kafka up -d --wait && bun run test:integration`
  */
 

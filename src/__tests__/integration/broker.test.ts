@@ -1,7 +1,7 @@
 /**
  * Integration test: broker connectivity, admin operations, produce/consume.
  *
- * Requires a running Kafka broker (see docker-compose.yml).
+ * Requires a running Kafka broker (see docker-compose.yaml).
  * Run: `docker compose up -d` then `bun run test:integration`
  *
  * @see https://kafka.apache.org/protocol.html#The_Messages_ApiVersions
