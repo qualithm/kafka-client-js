@@ -19,9 +19,7 @@ import {
   KafkaTimeoutError
 } from "@qualithm/kafka-client"
 
-/**
- * Simulate handling different error types.
- */
+// Simulate handling different error types.
 function handleError(error: unknown): void {
   if (KafkaTimeoutError.isError(error)) {
     console.log(`  Timeout (${String(error.timeoutMs)}ms) at broker: ${error.broker ?? "unknown"}`)
@@ -42,15 +40,15 @@ function handleError(error: unknown): void {
 }
 
 function main(): void {
-  console.log("=== Error Handling Examples ===\n")
+  console.log("=== Error Handling ===\n")
 
-  // Example 1: Timeout error
-  console.log("--- Example 1: Timeout Error ---")
+  // Timeout error
+  console.log("--- Timeout Error ---")
   handleError(new KafkaTimeoutError("request timed out", 30000, { broker: "kafka-1:9092" }))
   console.log()
 
-  // Example 2: Connection error
-  console.log("--- Example 2: Connection Error ---")
+  // Connection error
+  console.log("--- Connection Error ---")
   handleError(
     new KafkaConnectionError("connection refused", {
       broker: "kafka-2:9092",
@@ -59,21 +57,21 @@ function main(): void {
   )
   console.log()
 
-  // Example 3: Protocol error (retriable)
-  console.log("--- Example 3: Retriable Protocol Error ---")
+  // Protocol error (retriable)
+  console.log("--- Retriable Protocol Error ---")
   handleError(new KafkaProtocolError("not leader for partition", 6, true))
   console.log()
 
-  // Example 4: Protocol error (fatal)
-  console.log("--- Example 4: Fatal Protocol Error ---")
+  // Protocol error (fatal)
+  console.log("--- Fatal Protocol Error ---")
   handleError(new KafkaProtocolError("topic authorisation failed", 29, false))
   console.log()
 
-  // Example 5: Config error
-  console.log("--- Example 5: Config Error ---")
+  // Config error
+  console.log("--- Config Error ---")
   handleError(new KafkaConfigError("invalid broker address format"))
 
-  console.log("\nExamples complete.")
+  console.log("\nDone.")
 }
 
 main()

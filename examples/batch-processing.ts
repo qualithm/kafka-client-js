@@ -25,9 +25,7 @@ import {
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
-/**
- * Create a batch of messages for a topic-partition.
- */
+// Create a batch of messages for a topic-partition.
 function createBatch(
   topicPartition: TopicPartition,
   records: { key: string; value: string }[]
@@ -40,7 +38,7 @@ function createBatch(
 }
 
 function main(): void {
-  console.log("=== Batch Processing Examples ===\n")
+  console.log("=== Batch Processing ===\n")
 
   // Parse broker addresses
   const brokers = ["kafka-1:9092", "kafka-2:9092", "kafka-3:9092"]
@@ -95,7 +93,7 @@ function main(): void {
     console.log(`    Offset ${String(rec.offsetDelta)}: key=${key} value=${value}`)
   }
 
-  console.log("\nExamples complete.")
+  console.log("\nDone.")
 }
 
 main()

@@ -2,9 +2,9 @@
  * Produce and consume example.
  *
  * Demonstrates end-to-end message flow with a live Kafka broker.
- * Requires a running broker (see docker-compose.yaml):
  *
- *   docker compose up -d
+ * Requires a running Kafka broker (`docker compose up -d`).
+ * Set `KAFKA_BROKER` to configure the broker address.
  *
  * @example
  * ```bash
@@ -20,7 +20,7 @@ const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
 async function main(): Promise<void> {
-  console.log("=== Produce & Consume Example ===\n")
+  console.log("=== Produce & Consume ===\n")
 
   const broker = process.env.KAFKA_BROKER ?? "localhost:9092"
   console.log(`Broker: ${broker}\n`)
@@ -62,10 +62,9 @@ async function main(): Promise<void> {
     )
     console.log(`Produced ${String(messages.length)} messages:`, result)
     await producer.close()
-    console.log()
 
     // Consume messages
-    console.log("--- Consuming Messages ---")
+    console.log("\n--- Consuming Messages ---")
     const consumer = kafka.consumer({ groupId: `example-group-${String(Date.now())}` })
     consumer.subscribe([topicName])
     await consumer.connect()
@@ -94,7 +93,7 @@ async function main(): Promise<void> {
     await kafka.disconnect()
   }
 
-  console.log("\nExample complete.")
+  console.log("\nDone.")
 }
 
 main().catch(console.error)
