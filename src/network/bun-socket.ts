@@ -28,12 +28,16 @@ import type { KafkaSocket, SocketConnectOptions, SocketFactory } from "./socket.
  * })
  * ```
  */
-export function createBunSocketFactory(): SocketFactory {
-  return async (options: SocketConnectOptions): Promise<KafkaSocket> => connectBunSocket(options)
+export function createBunSocketFactory(connect?: typeof Bun.connect): SocketFactory {
+  return async (options: SocketConnectOptions): Promise<KafkaSocket> =>
+    connectBunSocket(options, connect ?? Bun.connect)
 }
 
 /** @internal */
-async function connectBunSocket(options: SocketConnectOptions): Promise<KafkaSocket> {
+async function connectBunSocket(
+  options: SocketConnectOptions,
+  connect: typeof Bun.connect
+): Promise<KafkaSocket> {
   const { host, port, tls, onData, onError, onClose } = options
 
   const tlsOptions = buildTlsOptions(tls)
@@ -41,7 +45,7 @@ async function connectBunSocket(options: SocketConnectOptions): Promise<KafkaSoc
   // Drain resolvers queued when writes encounter backpressure
   let drainResolve: (() => void) | null = null
 
-  const socket = await Bun.connect({
+  const socket = await connect({
     hostname: host,
     port,
     tls: tlsOptions,
