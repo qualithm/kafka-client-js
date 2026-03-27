@@ -16,7 +16,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
+    "types": ["bun"],
     "paths": {
       "@qualithm/kafka-client": ["./src/index.ts"]
     }
