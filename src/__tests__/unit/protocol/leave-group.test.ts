@@ -340,5 +340,38 @@ describe("decodeLeaveGroupResponse", () => {
       const result = decodeLeaveGroupResponse(reader, 0)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure when member ID is truncated in v3 response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeInt16(0) // error_code
+      writer.writeInt32(1) // members count = 1, then truncate before member_id
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeLeaveGroupResponse(reader, 3)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when group_instance_id is truncated in v3 response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeInt16(0) // error_code
+      writer.writeInt32(1) // members count = 1
+      writer.writeString("m-0") // member_id OK, then truncate before group_instance_id
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeLeaveGroupResponse(reader, 3)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when per-member error_code is truncated in v3 response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeInt16(0) // error_code
+      writer.writeInt32(1) // members count = 1
+      writer.writeString("m-0") // member_id
+      writer.writeString(null) // group_instance_id (null string), then truncate before per-member error_code
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeLeaveGroupResponse(reader, 3)
+      expect(result.ok).toBe(false)
+    })
   })
 })

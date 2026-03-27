@@ -458,5 +458,26 @@ describe("decodeOffsetFetchResponse", () => {
       const result = decodeOffsetFetchResponse(reader, 3)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure when partition index is truncated in v0 response", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // topics count = 1
+      writer.writeString("t") // topic name
+      writer.writeInt32(1) // partitions count = 1, then truncate before partition_index
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeOffsetFetchResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when committed_offset is truncated", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // topics count = 1
+      writer.writeString("t") // topic name
+      writer.writeInt32(1) // partitions count = 1
+      writer.writeInt32(0) // partition_index, then truncate before committed_offset (INT64)
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeOffsetFetchResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
   })
 })

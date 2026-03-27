@@ -805,4 +805,39 @@ describe("decodeProduceResponse", () => {
       }
     })
   })
+
+  describe("error handling", () => {
+    it("returns failure when record error batch_index is truncated (v8)", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // topics count
+      writer.writeString("a") // topic name
+      writer.writeInt32(1) // partitions count
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      writer.writeInt64(0n) // base_offset
+      writer.writeInt64(-1n) // log_append_time_ms
+      writer.writeInt64(-1n) // log_start_offset
+      writer.writeInt32(1) // record_errors count = 1, then truncate before batch_index
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeProduceResponse(reader, 8)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when record error message is truncated (v8)", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // topics count
+      writer.writeString("a") // topic name
+      writer.writeInt32(1) // partitions count
+      writer.writeInt32(0) // partition_index
+      writer.writeInt16(0) // error_code
+      writer.writeInt64(0n) // base_offset
+      writer.writeInt64(-1n) // log_append_time_ms
+      writer.writeInt64(-1n) // log_start_offset
+      writer.writeInt32(1) // record_errors count = 1
+      writer.writeInt32(0) // batch_index, then truncate before error message string
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeProduceResponse(reader, 8)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

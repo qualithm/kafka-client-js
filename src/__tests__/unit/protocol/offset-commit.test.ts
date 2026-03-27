@@ -324,5 +324,26 @@ describe("decodeOffsetCommitResponse", () => {
       const result = decodeOffsetCommitResponse(reader, 3)
       expect(result.ok).toBe(false)
     })
+
+    it("returns failure when partition index is truncated", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // topics count = 1
+      writer.writeString("t") // topic name
+      writer.writeInt32(1) // partitions count = 1, then truncate before partition_index
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeOffsetCommitResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when partition error_code is truncated", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(1) // topics count = 1
+      writer.writeString("t") // topic name
+      writer.writeInt32(1) // partitions count = 1
+      writer.writeInt32(0) // partition_index, then truncate before error_code
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeOffsetCommitResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
   })
 })

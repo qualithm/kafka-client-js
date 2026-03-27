@@ -193,4 +193,29 @@ describe("decodeEndTxnResponse", () => {
       expect(result.value.taggedFields).toEqual([])
     })
   })
+
+  describe("error handling", () => {
+    it("returns failure when throttle_time_ms is truncated", () => {
+      const reader = new BinaryReader(new Uint8Array(0))
+      const result = decodeEndTxnResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when error_code is truncated", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms only — no error_code
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeEndTxnResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when tagged fields are truncated (v3)", () => {
+      const writer = new BinaryWriter()
+      writer.writeInt32(0) // throttle_time_ms
+      writer.writeInt16(0) // error_code — no tagged fields varint follows
+      const reader = new BinaryReader(writer.finish())
+      const result = decodeEndTxnResponse(reader, 3)
+      expect(result.ok).toBe(false)
+    })
+  })
 })

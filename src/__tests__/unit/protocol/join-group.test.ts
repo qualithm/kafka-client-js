@@ -433,4 +433,35 @@ describe("decodeJoinGroupResponse", () => {
       expect(result.value.members[0].groupInstanceId).toBeNull()
     })
   })
+
+  describe("error handling", () => {
+    it("returns failure on empty buffer (v0)", () => {
+      const reader = new BinaryReader(new Uint8Array(0))
+      const result = decodeJoinGroupResponse(reader, 0)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when throttle_time_ms is truncated (v2)", () => {
+      const reader = new BinaryReader(new Uint8Array(2)) // INT32 needs 4 bytes
+      const result = decodeJoinGroupResponse(reader, 2)
+      expect(result.ok).toBe(false)
+    })
+
+    it("returns failure when member metadata is truncated in v6 response", () => {
+      const w = new BinaryWriter()
+      w.writeInt32(0) // throttle_time_ms
+      w.writeInt16(0) // error_code
+      w.writeInt32(1) // generation_id
+      w.writeCompactString("range") // protocol_name
+      w.writeCompactString("l-0") // leader
+      w.writeCompactString("m-0") // member_id
+      w.writeUnsignedVarInt(2) // members count = 1 (compact: +1)
+      w.writeCompactString("m-0") // member member_id
+      w.writeCompactString(null) // group_instance_id (v5+)
+      // truncate before metadata bytes
+      const reader = new BinaryReader(w.finish())
+      const result = decodeJoinGroupResponse(reader, 6)
+      expect(result.ok).toBe(false)
+    })
+  })
 })
