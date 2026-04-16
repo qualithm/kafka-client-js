@@ -1,6 +1,6 @@
 {
   "name": "@qualithm/kafka-client",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Native Apache Kafka client for JavaScript and TypeScript runtimes.",
   "private": false,
   "type": "module",
