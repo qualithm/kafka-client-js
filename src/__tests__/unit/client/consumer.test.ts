@@ -573,9 +573,7 @@ describe("KafkaConsumer", () => {
 
       let callCount = 0
       const pool = createMockPool({
-        brokers: new Map([
-          [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
-        ]),
+        brokers: new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]]),
         getConnectionByNodeId: vi.fn(async () => {
           callCount++
           // First getConnectionByNodeId call is the failing attempt
@@ -724,9 +722,7 @@ describe("KafkaConsumer", () => {
       ])
 
       const pool = createMockPool({
-        brokers: new Map([
-          [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
-        ]),
+        brokers: new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]]),
 
         getConnectionByNodeId: vi.fn(async () =>
           Promise.resolve(conn)
@@ -1021,9 +1017,7 @@ describe("KafkaConsumer", () => {
       ])
 
       const pool = createMockPool({
-        brokers: new Map([
-          [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
-        ]),
+        brokers: new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]]),
 
         getConnectionByNodeId: vi.fn(async () =>
           Promise.resolve(conn)
@@ -1136,9 +1130,7 @@ describe("KafkaConsumer", () => {
       ])
 
       const pool = createMockPool({
-        brokers: new Map([
-          [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
-        ]),
+        brokers: new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]]),
 
         getConnectionByNodeId: vi.fn(async () =>
           Promise.resolve(conn)
@@ -1168,9 +1160,7 @@ describe("KafkaConsumer", () => {
       ])
 
       const pool = createMockPool({
-        brokers: new Map([
-          [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
-        ]),
+        brokers: new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]]),
 
         getConnectionByNodeId: vi.fn(async () =>
           Promise.resolve(conn)
@@ -1195,9 +1185,7 @@ describe("KafkaConsumer", () => {
       ])
 
       const pool = createMockPool({
-        brokers: new Map([
-          [1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]
-        ]),
+        brokers: new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]]),
 
         getConnectionByNodeId: vi.fn(async () =>
           Promise.resolve(conn)
