@@ -111,7 +111,7 @@ function createMockPool(overrides?: Partial<ConnectionPool>): ConnectionPool {
 function poolWithConn(mockConn: ReturnType<typeof createMockConnection>): ConnectionPool {
   const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
   return createMockPool({
-    brokers: brokerMap as ConnectionPool["brokers"],
+    brokers: brokerMap,
     getConnectionByNodeId: vi.fn(async () =>
       Promise.resolve(mockConn)
     ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1660,7 +1660,7 @@ describe("KafkaAdmin", () => {
       const releaseSpy = vi.fn()
       const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
       const pool = createMockPool({
-        brokers: brokerMap as ConnectionPool["brokers"],
+        brokers: brokerMap,
         getConnectionByNodeId: vi.fn(async () =>
           Promise.resolve(conn)
         ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1684,7 +1684,7 @@ describe("KafkaAdmin", () => {
       const releaseSpy = vi.fn()
       const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
       const pool = createMockPool({
-        brokers: brokerMap as ConnectionPool["brokers"],
+        brokers: brokerMap,
         getConnectionByNodeId: vi.fn(async () =>
           Promise.resolve(conn)
         ) as unknown as ConnectionPool["getConnectionByNodeId"],
