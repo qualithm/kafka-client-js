@@ -174,7 +174,7 @@ export function decodeResponseHeader(
 
   const correlationResult = reader.readInt32()
   if (!correlationResult.ok) {
-    return correlationResult as DecodeResult<ResponseHeader>
+    return correlationResult
   }
 
   if (version === 0) {
@@ -187,7 +187,7 @@ export function decodeResponseHeader(
   // v1 (flexible): read tagged fields
   const taggedResult = reader.readTaggedFields()
   if (!taggedResult.ok) {
-    return taggedResult as DecodeResult<ResponseHeader>
+    return taggedResult
   }
 
   return decodeSuccess(
@@ -244,7 +244,7 @@ export function readResponseFrame(reader: BinaryReader): DecodeResult<BinaryRead
 
   const sizeResult = reader.readInt32()
   if (!sizeResult.ok) {
-    return sizeResult as DecodeResult<BinaryReader>
+    return sizeResult
   }
 
   const size = sizeResult.value
@@ -254,7 +254,7 @@ export function readResponseFrame(reader: BinaryReader): DecodeResult<BinaryRead
 
   const payloadResult = reader.readRawBytes(size)
   if (!payloadResult.ok) {
-    return payloadResult as DecodeResult<BinaryReader>
+    return payloadResult
   }
 
   return decodeSuccess(new BinaryReader(payloadResult.value), reader.offset - startPos)

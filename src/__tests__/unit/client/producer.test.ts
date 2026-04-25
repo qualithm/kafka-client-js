@@ -243,7 +243,7 @@ function createPoolWithBroker(
   // subsequent calls route to the produce connection by leader nodeId
   let getConnCallCount = 0
   const pool = createMockPool({
-    brokers: brokerMap as ConnectionPool["brokers"],
+    brokers: brokerMap,
     getConnectionByNodeId: vi.fn(async () => {
       getConnCallCount++
       // First call is for metadata refresh, remaining are for produce
@@ -626,7 +626,7 @@ describe("KafkaProducer send (integration path)", () => {
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     let getConnCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         if (getConnCall === 1) {
@@ -814,7 +814,7 @@ describe("KafkaProducer send (integration path)", () => {
 
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -842,7 +842,7 @@ describe("KafkaProducer send (integration path)", () => {
 
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -879,7 +879,7 @@ describe("KafkaProducer send (integration path)", () => {
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     let callN = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         callN++
         return Promise.resolve(callN === 1 ? metadataConn : produceConn)
@@ -901,7 +901,7 @@ describe("KafkaProducer send (integration path)", () => {
 
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -945,7 +945,7 @@ describe("KafkaProducer send (integration path)", () => {
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     let n = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return Promise.resolve(n === 1 ? metadataConn : produceConn)
@@ -991,7 +991,7 @@ describe("KafkaProducer send (integration path)", () => {
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     let n = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return Promise.resolve(n === 1 ? metadataConn : produceConn)
@@ -1043,7 +1043,7 @@ describe("KafkaProducer send (integration path)", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let getConnCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         // 1st call: InitProducerId, 2nd: metadata, 3rd: produce
@@ -1096,7 +1096,7 @@ describe("KafkaProducer send (integration path)", () => {
 
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1127,7 +1127,7 @@ describe("KafkaProducer send (integration path)", () => {
 
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1314,7 +1314,7 @@ describe("KafkaProducer sendToPartition (integration path)", () => {
 
     const brokerMap = new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1359,7 +1359,7 @@ describe("KafkaProducer edge-case errors", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let n = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return Promise.resolve(n === 1 ? metadataConn : produceConn)
@@ -1380,7 +1380,7 @@ describe("KafkaProducer edge-case errors", () => {
 
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1404,7 +1404,7 @@ describe("KafkaProducer edge-case errors", () => {
 
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1442,7 +1442,7 @@ describe("KafkaProducer edge-case errors", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let n = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return Promise.resolve(n === 1 ? metadataConn : produceConn)
@@ -1465,7 +1465,7 @@ describe("KafkaProducer edge-case errors", () => {
 
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(metadataConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -1501,7 +1501,7 @@ describe("KafkaProducer edge-case errors", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let n = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return Promise.resolve(n === 1 ? metadataConn : produceConn)
@@ -1706,7 +1706,7 @@ describe("KafkaProducer batching", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let n = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         n++
         return Promise.resolve(n === 1 ? metadataConn : produceConn)
@@ -1829,7 +1829,7 @@ describe("KafkaProducer retry", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let getConnCalls = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCalls++
         // Odd calls for metadata, even calls for produce
@@ -1930,7 +1930,7 @@ describe("KafkaProducer retry", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let getConnCalls = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCalls++
         return Promise.resolve(getConnCalls % 2 === 1 ? metadataConn : produceConn)
@@ -2004,7 +2004,7 @@ describe("KafkaProducer retry", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let getConnCalls = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCalls++
         return Promise.resolve(getConnCalls % 2 === 1 ? metadataConn : produceConn)
@@ -2087,7 +2087,7 @@ describe("KafkaProducer idempotent", () => {
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     let getConnCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         // 1st: InitProducerId, 2nd: metadata, 3rd+: produce
@@ -2211,7 +2211,7 @@ describe("KafkaProducer idempotent", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let getConnCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         if (getConnCall === 1) {
@@ -2277,7 +2277,7 @@ describe("KafkaProducer idempotent", () => {
 
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(initPidConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -2300,7 +2300,7 @@ describe("KafkaProducer idempotent", () => {
 
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(initPidConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -2494,7 +2494,7 @@ describe("KafkaProducer transactional", () => {
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     let getConnByIdCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -2787,7 +2787,7 @@ describe("KafkaProducer transactional", () => {
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     let getConnByIdCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -2824,7 +2824,7 @@ describe("KafkaProducer transactional", () => {
 
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         return Promise.resolve(coordinatorConn)
       }) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -2958,7 +2958,7 @@ describe("KafkaProducer transactional", () => {
     let getConnByIdCall = 0
     let getConnCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3057,7 +3057,7 @@ describe("KafkaProducer transactional", () => {
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     let getConnByIdCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3127,7 +3127,7 @@ describe("KafkaProducer transactional", () => {
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     let getConnByIdCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3175,7 +3175,7 @@ describe("KafkaProducer transactional", () => {
 
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () =>
         Promise.resolve(coordinatorConn)
       ) as unknown as ConnectionPool["getConnectionByNodeId"],
@@ -3220,7 +3220,7 @@ describe("KafkaProducer transactional", () => {
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
     let getConnByIdCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnByIdCall++
         if (getConnByIdCall === 1) {
@@ -3362,7 +3362,7 @@ describe("KafkaProducer transactional", () => {
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
     let getConnCall = 0
     const pool = createMockPool({
-      brokers: brokerMap as ConnectionPool["brokers"],
+      brokers: brokerMap,
       getConnectionByNodeId: vi.fn(async () => {
         getConnCall++
         if (getConnCall === 1) {
