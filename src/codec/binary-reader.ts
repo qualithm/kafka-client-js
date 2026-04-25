@@ -218,7 +218,7 @@ export class BinaryReader {
     const startPos = this.pos
     const lenResult = this.readInt16()
     if (!lenResult.ok) {
-      return lenResult as DecodeResult<string | null>
+      return lenResult
     }
     const length = lenResult.value
 
@@ -247,7 +247,7 @@ export class BinaryReader {
     const startPos = this.pos
     const lenResult = this.readUnsignedVarInt()
     if (!lenResult.ok) {
-      return lenResult as DecodeResult<string | null>
+      return lenResult
     }
     const rawLength = lenResult.value
 
@@ -282,7 +282,7 @@ export class BinaryReader {
     const startPos = this.pos
     const lenResult = this.readInt32()
     if (!lenResult.ok) {
-      return lenResult as DecodeResult<Uint8Array | null>
+      return lenResult
     }
     const length = lenResult.value
 
@@ -316,7 +316,7 @@ export class BinaryReader {
     const startPos = this.pos
     const lenResult = this.readUnsignedVarInt()
     if (!lenResult.ok) {
-      return lenResult as DecodeResult<Uint8Array | null>
+      return lenResult
     }
     const rawLength = lenResult.value
 
@@ -351,7 +351,7 @@ export class BinaryReader {
     const startPos = this.pos
     const countResult = this.readInt32()
     if (!countResult.ok) {
-      return countResult as DecodeResult<T[] | null>
+      return countResult
     }
     const count = countResult.value
 
@@ -368,7 +368,7 @@ export class BinaryReader {
       const elemResult = readElement(this)
       if (!elemResult.ok) {
         this.pos = startPos
-        return elemResult as DecodeResult<T[] | null>
+        return elemResult
       }
       elements.push(elemResult.value)
     }
@@ -386,7 +386,7 @@ export class BinaryReader {
     const startPos = this.pos
     const countResult = this.readUnsignedVarInt()
     if (!countResult.ok) {
-      return countResult as DecodeResult<T[] | null>
+      return countResult
     }
     const rawCount = countResult.value
 
@@ -400,7 +400,7 @@ export class BinaryReader {
       const elemResult = readElement(this)
       if (!elemResult.ok) {
         this.pos = startPos
-        return elemResult as DecodeResult<T[] | null>
+        return elemResult
       }
       elements.push(elemResult.value)
     }
@@ -420,7 +420,7 @@ export class BinaryReader {
     const startPos = this.pos
     const countResult = this.readUnsignedVarInt()
     if (!countResult.ok) {
-      return countResult as DecodeResult<TaggedField[]>
+      return countResult
     }
     const count = countResult.value
 
@@ -429,13 +429,13 @@ export class BinaryReader {
       const tagResult = this.readUnsignedVarInt()
       if (!tagResult.ok) {
         this.pos = startPos
-        return tagResult as DecodeResult<TaggedField[]>
+        return tagResult
       }
 
       const sizeResult = this.readUnsignedVarInt()
       if (!sizeResult.ok) {
         this.pos = startPos
-        return sizeResult as DecodeResult<TaggedField[]>
+        return sizeResult
       }
 
       if (this.remaining < sizeResult.value) {
