@@ -10,7 +10,7 @@
 services:
   redpanda:
     profiles: [redpanda]
-    image: redpandadata/redpanda:v26.1.2
+    image: redpandadata/redpanda:v26.1.2@sha256:65a7a93449f113a2941e0e8a9cd7eb1ed3ba153547b6b2b47f11796e9f754345
     command:
       - redpanda
       - start
@@ -31,7 +31,7 @@ services:
 
   kafka:
     profiles: [kafka]
-    image: apache/kafka:4.2.0
+    image: apache/kafka:4.2.0@sha256:9516fb7634bad307d17c33b589fde9023003b0cb761374f500002b980a3149b9
     hostname: kafka
     environment:
       KAFKA_NODE_ID: "1"
@@ -60,7 +60,7 @@ services:
 
   kafka-sasl:
     profiles: [kafka-sasl]
-    image: apache/kafka:4.2.0
+    image: apache/kafka:4.2.0@sha256:9516fb7634bad307d17c33b589fde9023003b0cb761374f500002b980a3149b9
     hostname: kafka-sasl
     ports:
       - "9094:9094"
