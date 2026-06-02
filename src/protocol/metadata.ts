@@ -70,14 +70,14 @@ export type MetadataRequest = {
    */
   readonly allowAutoTopicCreation?: boolean
   /**
-   * Include cluster-level authorised operations (v8–v10).
+   * Include cluster-level authorized operations (v8–v10).
    * Removed in v11+.
    */
-  readonly includeClusterAuthorisedOperations?: boolean
+  readonly includeClusterAuthorizedOperations?: boolean
   /**
-   * Include topic-level authorised operations (v8+).
+   * Include topic-level authorized operations (v8+).
    */
-  readonly includeTopicAuthorisedOperations?: boolean
+  readonly includeTopicAuthorizedOperations?: boolean
   /** Tagged fields (v9+). */
   readonly taggedFields?: readonly TaggedField[]
 }
@@ -138,8 +138,8 @@ export type MetadataTopic = {
   readonly isInternal: boolean
   /** Partition metadata. */
   readonly partitions: readonly MetadataPartition[]
-  /** Topic-level authorised operations bitmask (v8+). */
-  readonly topicAuthorisedOperations: number
+  /** Topic-level authorized operations bitmask (v8+). */
+  readonly topicAuthorizedOperations: number
   /** Tagged fields (v9+). */
   readonly taggedFields?: readonly TaggedField[]
 }
@@ -158,8 +158,8 @@ export type MetadataResponse = {
   readonly controllerId: number
   /** Topic metadata. */
   readonly topics: readonly MetadataTopic[]
-  /** Cluster-level authorised operations bitmask (v8–v10). */
-  readonly clusterAuthorisedOperations: number
+  /** Cluster-level authorized operations bitmask (v8–v10). */
+  readonly clusterAuthorizedOperations: number
   /** Tagged fields (v9+). */
   readonly taggedFields: readonly TaggedField[]
 }
@@ -227,12 +227,12 @@ export function encodeMetadataRequest(
 
   // include_cluster_authorized_operations (v8–v10)
   if (apiVersion >= 8 && apiVersion <= 10) {
-    writer.writeBoolean(request.includeClusterAuthorisedOperations ?? false)
+    writer.writeBoolean(request.includeClusterAuthorizedOperations ?? false)
   }
 
   // include_topic_authorized_operations (v8+)
   if (apiVersion >= 8) {
-    writer.writeBoolean(request.includeTopicAuthorisedOperations ?? false)
+    writer.writeBoolean(request.includeTopicAuthorizedOperations ?? false)
   }
 
   // Tagged fields (v9+)
@@ -331,13 +331,13 @@ export function decodeMetadataResponse(
   const topics = topicsResult.value
 
   // Cluster authorized operations (v8–v10)
-  let clusterAuthorisedOperations = -2147483648 // INT32_MIN = not requested
+  let clusterAuthorizedOperations = -2147483648 // INT32_MIN = not requested
   if (apiVersion >= 8 && apiVersion <= 10) {
     const opsResult = reader.readInt32()
     if (!opsResult.ok) {
       return opsResult
     }
-    clusterAuthorisedOperations = opsResult.value
+    clusterAuthorizedOperations = opsResult.value
   }
 
   // Tagged fields (v9+)
@@ -357,7 +357,7 @@ export function decodeMetadataResponse(
       clusterId,
       controllerId,
       topics,
-      clusterAuthorisedOperations,
+      clusterAuthorizedOperations,
       taggedFields
     },
     reader.offset - startOffset
@@ -515,13 +515,13 @@ function decodeTopics(
     }
 
     // Topic authorized operations (v8+)
-    let topicAuthorisedOperations = -2147483648
+    let topicAuthorizedOperations = -2147483648
     if (apiVersion >= 8) {
       const opsResult = reader.readInt32()
       if (!opsResult.ok) {
         return opsResult
       }
-      topicAuthorisedOperations = opsResult.value
+      topicAuthorizedOperations = opsResult.value
     }
 
     // Tagged fields (v9+)
@@ -540,7 +540,7 @@ function decodeTopics(
       topicId,
       isInternal,
       partitions: partitionsResult.value,
-      topicAuthorisedOperations,
+      topicAuthorizedOperations,
       taggedFields: entryTaggedFields
     })
   }

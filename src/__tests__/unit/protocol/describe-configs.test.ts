@@ -408,7 +408,7 @@ describe("decodeDescribeConfigsResponse", () => {
     writer.writeInt32(0) // throttle
     writer.writeInt32(1) // resources
     writer.writeInt16(29) // CLUSTER_AUTHORIZATION_FAILED
-    writer.writeString("not authorised")
+    writer.writeString("not authorized")
     writer.writeInt8(2) // Topic
     writer.writeString("secret-topic")
     writer.writeInt32(0) // configs (empty)
@@ -422,7 +422,7 @@ describe("decodeDescribeConfigsResponse", () => {
     }
 
     expect(result.value.resources[0].errorCode).toBe(29)
-    expect(result.value.resources[0].errorMessage).toBe("not authorised")
+    expect(result.value.resources[0].errorMessage).toBe("not authorized")
     expect(result.value.resources[0].configs).toHaveLength(0)
   })
 

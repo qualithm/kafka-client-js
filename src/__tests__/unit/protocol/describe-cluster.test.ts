@@ -165,7 +165,7 @@ describe("decodeDescribeClusterResponse", () => {
     const w = new BinaryWriter()
     w.writeInt32(0) // throttle_time_ms
     w.writeInt16(29) // CLUSTER_AUTHORIZATION_FAILED
-    w.writeCompactString("not authorised") // error_message
+    w.writeCompactString("not authorized") // error_message
     w.writeCompactString("") // cluster_id
     w.writeInt32(-1) // controller_id
     w.writeUnsignedVarInt(1) // 0 brokers + 1
@@ -182,7 +182,7 @@ describe("decodeDescribeClusterResponse", () => {
     }
 
     expect(result.value.errorCode).toBe(29)
-    expect(result.value.errorMessage).toBe("not authorised")
+    expect(result.value.errorMessage).toBe("not authorized")
   })
 
   it("decodes response with multiple brokers and rack", () => {

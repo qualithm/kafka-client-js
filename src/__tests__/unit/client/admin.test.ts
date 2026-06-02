@@ -1254,7 +1254,7 @@ describe("KafkaAdmin", () => {
   })
 
   // -------------------------------------------------------------------------
-  // retry behaviour
+  // retry behavior
   // -------------------------------------------------------------------------
 
   describe("retry", () => {
@@ -1305,7 +1305,7 @@ describe("KafkaAdmin", () => {
         send: vi.fn(async () => {
           callCount++
           if (callCount === 2) {
-            return Promise.reject(new KafkaConnectionError("not authorised", { retriable: false }))
+            return Promise.reject(new KafkaConnectionError("not authorized", { retriable: false }))
           }
           return Promise.resolve(new BinaryReader(responses[responseIndex++]))
         }),
@@ -1324,7 +1324,7 @@ describe("KafkaAdmin", () => {
           topics: [{ name: "x", numPartitions: 1, replicationFactor: 1 }],
           timeoutMs: 1000
         })
-      ).rejects.toThrow("not authorised")
+      ).rejects.toThrow("not authorized")
 
       expect(callCount).toBe(2) // only one attempt
     })

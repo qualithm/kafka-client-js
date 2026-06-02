@@ -116,7 +116,7 @@ function buildTlsOptions(tls: SocketConnectOptions["tls"]): Bun.TLSOptions | und
   }
 
   const options: Bun.TLSOptions = {
-    rejectUnauthorized: tls.rejectUnauthorised ?? true
+    rejectUnauthorized: tls.rejectUnauthorized ?? true
   }
 
   if (tls.ca !== undefined) {
