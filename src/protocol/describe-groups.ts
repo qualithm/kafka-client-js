@@ -38,7 +38,7 @@ import { type DecodeResult, decodeSuccess } from "../result.js"
 export type DescribeGroupsRequest = {
   /** The group IDs to describe. */
   readonly groups: readonly string[]
-  /** Whether to include authorised operations (v3+). */
+  /** Whether to include authorized operations (v3+). */
   readonly includeAuthorizedOperations?: boolean
   /** Tagged fields (v5+). */
   readonly taggedFields?: readonly TaggedField[]
@@ -84,7 +84,7 @@ export type DescribeGroupsGroup = {
   readonly protocolData: string
   /** Group members with their metadata and assignments. */
   readonly members: readonly DescribeGroupsMember[]
-  /** Authorised operations bitmask (v3+). -2147483648 if not requested. */
+  /** Authorized operations bitmask (v3+). -2147483648 if not requested. */
   readonly authorizedOperations: number
   /** Tagged fields (v5+). */
   readonly taggedFields: readonly TaggedField[]

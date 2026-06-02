@@ -59,7 +59,7 @@ describe("KafkaProtocolError", () => {
   })
 
   it("creates fatal protocol errors", () => {
-    const err = new KafkaProtocolError("topic authorisation failed", 29, false)
+    const err = new KafkaProtocolError("topic authorization failed", 29, false)
 
     expect(err.errorCode).toBe(29)
     expect(err.retriable).toBe(false)

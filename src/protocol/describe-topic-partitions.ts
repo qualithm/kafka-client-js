@@ -106,7 +106,7 @@ export type DescribeTopicPartitionsTopicResponse = {
   readonly isInternal: boolean
   /** The partitions. */
   readonly partitions: readonly DescribeTopicPartitionsPartitionResponse[]
-  /** Bitfield of topic authorised operations. */
+  /** Bitfield of topic authorized operations. */
   readonly topicAuthorizedOperations: number
   /** Tagged fields. */
   readonly taggedFields: readonly TaggedField[]

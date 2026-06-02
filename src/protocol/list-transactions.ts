@@ -64,7 +64,7 @@ export type ListTransactionsResponse = {
   readonly throttleTimeMs: number
   /** Error code (0 = no error). */
   readonly errorCode: number
-  /** State filters that were not recognised by the broker. */
+  /** State filters that were not recognized by the broker. */
   readonly unknownStateFilters: readonly string[]
   /** Listed transaction states. */
   readonly transactionStates: readonly ListedTransaction[]

@@ -220,7 +220,7 @@ type PartitionAccumulator = {
 /**
  * Default partitioner using murmur2 hash for keys and round-robin for null keys.
  *
- * This matches the default Java producer partitioner behaviour.
+ * This matches the default Java producer partitioner behavior.
  */
 export function defaultPartitioner(): Partitioner {
   let counter = 0

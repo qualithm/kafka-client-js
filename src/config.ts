@@ -43,8 +43,8 @@ export type TlsConfig = {
   readonly cert?: string
   /** Client private key in PEM format for mutual TLS. */
   readonly key?: string
-  /** Whether to reject unauthorised certificates (default: true). */
-  readonly rejectUnauthorised?: boolean
+  /** Whether to reject unauthorized certificates (default: true). */
+  readonly rejectUnauthorized?: boolean
 }
 
 /**

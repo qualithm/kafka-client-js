@@ -2,7 +2,7 @@
  * DescribeCluster request/response encoding and decoding.
  *
  * The DescribeCluster API (key 60) provides detailed cluster metadata
- * including broker endpoints and authorised operations.
+ * including broker endpoints and authorized operations.
  *
  * **Request versions:**
  * - v0: include_cluster_authorized_operations (BOOLEAN)
@@ -32,7 +32,7 @@ import { type DecodeResult, decodeSuccess } from "../result.js"
  * DescribeCluster request payload.
  */
 export type DescribeClusterRequest = {
-  /** Whether to include cluster authorised operations in the response. */
+  /** Whether to include cluster authorized operations in the response. */
   readonly includeClusterAuthorizedOperations: boolean
   /** The endpoint type to describe (v1+). 1 = brokers, 2 = controllers. */
   readonly endpointType?: number
@@ -76,7 +76,7 @@ export type DescribeClusterResponse = {
   readonly controllerId: number
   /** Brokers in the cluster. */
   readonly brokers: readonly DescribeClusterBroker[]
-  /** Bitfield of authorised operations, or -2147483648 if not requested. */
+  /** Bitfield of authorized operations, or -2147483648 if not requested. */
   readonly clusterAuthorizedOperations: number
   /** The endpoint type (v1+). */
   readonly endpointType: number
