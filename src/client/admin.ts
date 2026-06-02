@@ -1292,7 +1292,7 @@ export class KafkaAdmin {
   }
 
   /**
-   * Describe the cluster including broker endpoints and authorised operations.
+   * Describe the cluster including broker endpoints and authorized operations.
    *
    * @param request - The DescribeCluster request payload.
    * @returns The cluster description.

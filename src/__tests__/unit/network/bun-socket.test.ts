@@ -23,7 +23,7 @@ type SocketHandlers = {
 
 let mockSocket: MockBunSocket
 let capturedHandlers: SocketHandlers | null
-let connectBehaviour: (() => MockBunSocket | Promise<MockBunSocket>) | null
+let connectBehavior: (() => MockBunSocket | Promise<MockBunSocket>) | null
 let connectMock: ReturnType<typeof vi.fn>
 // Typed alias injected into createBunSocketFactory — cast once here, kept clean at call sites
 let bunConnectFn: typeof Bun.connect
@@ -39,7 +39,7 @@ function createDefaultMockSocket(): MockBunSocket {
 beforeEach(() => {
   mockSocket = createDefaultMockSocket()
   capturedHandlers = null
-  connectBehaviour = null
+  connectBehavior = null
 
   connectMock = vi
     .fn()
@@ -51,8 +51,8 @@ beforeEach(() => {
         socket: SocketHandlers
       }) => {
         capturedHandlers = options.socket
-        if (connectBehaviour) {
-          return connectBehaviour()
+        if (connectBehavior) {
+          return connectBehavior()
         }
         return mockSocket
       }
@@ -136,7 +136,7 @@ describe("createBunSocketFactory", () => {
             ca: "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----",
             cert: "client-cert",
             key: "client-key",
-            rejectUnauthorised: false
+            rejectUnauthorized: false
           }
         })
       )

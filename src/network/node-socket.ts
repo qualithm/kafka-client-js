@@ -99,7 +99,7 @@ function createSocket(host: string, port: number, tlsConfig?: TlsConfig): net.So
   const tlsOptions: tls.ConnectionOptions = {
     host,
     port,
-    rejectUnauthorized: tlsConfig.rejectUnauthorised ?? true
+    rejectUnauthorized: tlsConfig.rejectUnauthorized ?? true
   }
 
   if (tlsConfig.ca !== undefined) {

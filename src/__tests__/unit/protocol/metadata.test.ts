@@ -120,12 +120,12 @@ describe("encodeMetadataRequest", () => {
     })
   })
 
-  describe("v8+ — adds authorised operations flags", () => {
+  describe("v8+ — adds authorized operations flags", () => {
     it("encodes include_topic_authorized_operations", () => {
       const writer = new BinaryWriter()
       const request: MetadataRequest = {
         topics: [],
-        includeTopicAuthorisedOperations: true
+        includeTopicAuthorizedOperations: true
       }
       encodeMetadataRequest(writer, request, 8)
       const buf = writer.finish()
@@ -568,8 +568,8 @@ describe("decodeMetadataResponse", () => {
     })
   })
 
-  describe("v8+ — adds authorised operations", () => {
-    it("decodes response with cluster and topic authorised operations", () => {
+  describe("v8+ — adds authorized operations", () => {
+    it("decodes response with cluster and topic authorized operations", () => {
       const writer = new BinaryWriter()
 
       // Throttle time
@@ -591,10 +591,10 @@ describe("decodeMetadataResponse", () => {
       writer.writeBoolean(false)
       // Partitions (length: 0)
       writer.writeInt32(0)
-      // Topic authorised operations
+      // Topic authorized operations
       writer.writeInt32(0x0f) // some bitmap
 
-      // Cluster authorised operations
+      // Cluster authorized operations
       writer.writeInt32(0xff)
 
       const reader = new BinaryReader(writer.finish())
@@ -602,8 +602,8 @@ describe("decodeMetadataResponse", () => {
 
       expect(result.ok).toBe(true)
       if (result.ok) {
-        expect(result.value.topics[0].topicAuthorisedOperations).toBe(0x0f)
-        expect(result.value.clusterAuthorisedOperations).toBe(0xff)
+        expect(result.value.topics[0].topicAuthorizedOperations).toBe(0x0f)
+        expect(result.value.clusterAuthorizedOperations).toBe(0xff)
       }
     })
   })
@@ -638,12 +638,12 @@ describe("decodeMetadataResponse", () => {
       writer.writeBoolean(false) // is_internal
       // Partitions (compact array: length + 1 = 1)
       writer.writeUnsignedVarInt(1)
-      // Topic authorised operations
+      // Topic authorized operations
       writer.writeInt32(0)
       // Topic tagged fields
       writer.writeUnsignedVarInt(0)
 
-      // Cluster authorised operations (v9 still has this, removed in v11)
+      // Cluster authorized operations (v9 still has this, removed in v11)
       writer.writeInt32(0)
 
       // Response tagged fields
@@ -1237,7 +1237,7 @@ describe("decodeMetadataResponse", () => {
       expect(result.ok).toBe(true)
       if (result.ok) {
         // Default value when not read
-        expect(result.value.clusterAuthorisedOperations).toBe(-2147483648)
+        expect(result.value.clusterAuthorizedOperations).toBe(-2147483648)
       }
     })
   })

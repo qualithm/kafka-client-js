@@ -25,7 +25,7 @@ type MockSocketContext = {
 }
 
 function createMockSocketFactory(
-  connectBehaviour?: (ctx: MockSocketContext) => Promise<KafkaSocket> | KafkaSocket
+  connectBehavior?: (ctx: MockSocketContext) => Promise<KafkaSocket> | KafkaSocket
 ): MockSocketContext {
   const ctx: MockSocketContext = {
     factory: null as unknown as SocketFactory,
@@ -41,8 +41,8 @@ function createMockSocketFactory(
       onClose: options.onClose
     }
 
-    if (connectBehaviour) {
-      const sock = await connectBehaviour(ctx)
+    if (connectBehavior) {
+      const sock = await connectBehavior(ctx)
       ctx.socket = sock
       return sock
     }
@@ -160,12 +160,12 @@ describe("KafkaConnection", () => {
       }
       conn = new KafkaConnection({
         ...defaultOptions(factory),
-        tls: { enabled: true, rejectUnauthorised: false }
+        tls: { enabled: true, rejectUnauthorized: false }
       })
 
       await conn.connect()
 
-      expect(capturedTls).toEqual({ enabled: true, rejectUnauthorised: false })
+      expect(capturedTls).toEqual({ enabled: true, rejectUnauthorized: false })
     })
 
     it("throws if already connected", async () => {

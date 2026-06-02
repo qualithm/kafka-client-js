@@ -135,7 +135,7 @@ describe("createNodeSocketFactory", () => {
             ca: "ca-cert",
             cert: "client-cert",
             key: "client-key",
-            rejectUnauthorised: false
+            rejectUnauthorized: false
           }
         })
       )

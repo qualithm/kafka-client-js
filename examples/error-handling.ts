@@ -64,7 +64,7 @@ function main(): void {
 
   // Protocol error (fatal)
   console.log("--- Fatal Protocol Error ---")
-  handleError(new KafkaProtocolError("topic authorisation failed", 29, false))
+  handleError(new KafkaProtocolError("topic authorization failed", 29, false))
   console.log()
 
   // Config error

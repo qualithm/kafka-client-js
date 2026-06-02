@@ -37,7 +37,7 @@ import { type DecodeResult, decodeSuccess } from "../result.js"
 export type ConsumerGroupDescribeRequest = {
   /** The IDs of the groups to describe. */
   readonly groupIds: readonly string[]
-  /** Whether to include authorised operations. */
+  /** Whether to include authorized operations. */
   readonly includeAuthorizedOperations: boolean
   /** Tagged fields. */
   readonly taggedFields?: readonly TaggedField[]
@@ -119,7 +119,7 @@ export type ConsumerGroupDescribeGroup = {
   readonly assignorName: string
   /** The group members. */
   readonly members: readonly ConsumerGroupDescribeMember[]
-  /** 32-bit bitfield of authorised operations, or -2147483648 if not requested. */
+  /** 32-bit bitfield of authorized operations, or -2147483648 if not requested. */
   readonly authorizedOperations: number
   /** Tagged fields. */
   readonly taggedFields: readonly TaggedField[]

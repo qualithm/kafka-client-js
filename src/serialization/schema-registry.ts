@@ -184,7 +184,7 @@ const RETRIABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504])
  * Confluent Schema Registry client.
  *
  * Provides methods for registering and fetching schemas. Caches schemas
- * by ID and by subject to minimise HTTP round-trips.
+ * by ID and by subject to minimize HTTP round-trips.
  *
  * @example
  * ```ts
