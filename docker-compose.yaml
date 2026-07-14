@@ -10,7 +10,7 @@
 services:
   redpanda:
     profiles: [redpanda]
-    image: redpandadata/redpanda:v26.1.2@sha256:65a7a93449f113a2941e0e8a9cd7eb1ed3ba153547b6b2b47f11796e9f754345
+    image: redpandadata/redpanda:v26.1.12@sha256:3e72ea35731a893bdd3b6d283eb554416377e23766434fc85dd7941540673639
     command:
       - redpanda
       - start
