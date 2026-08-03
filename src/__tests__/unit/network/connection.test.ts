@@ -755,5 +755,122 @@ describe("KafkaConnection", () => {
 
       await expect(conn.authenticate()).rejects.toThrow("SASL authentication failed")
     })
+
+    describe("authProvider", () => {
+      /** Response frames for a successful PLAIN exchange. */
+      function plainExchange(): Uint8Array[] {
+        return [buildHandshakeResponse(0, ["PLAIN"]), buildAuthResponse(0, null, new Uint8Array(0))]
+      }
+
+      /** Decode a written request frame so credentials can be asserted on. */
+      function writtenText(frame: Uint8Array): string {
+        return new TextDecoder().decode(frame)
+      }
+
+      it("resolves credentials from the provider", async () => {
+        const mock = createAutoRespondingMock(plainExchange())
+        const provider = vi.fn(async () => ({
+          mechanism: "PLAIN" as const,
+          username: "rotating-user",
+          password: "secret-1"
+        }))
+
+        conn = new KafkaConnection({
+          ...defaultOptions(mock.factory),
+          authProvider: provider
+        })
+        await conn.connect()
+
+        await conn.authenticate()
+
+        expect(provider).toHaveBeenCalledTimes(1)
+        expect(mock.written.length).toBe(2)
+        expect(writtenText(mock.written[1])).toContain("secret-1")
+      })
+
+      it("accepts a synchronous provider", async () => {
+        const mock = createAutoRespondingMock(plainExchange())
+        conn = new KafkaConnection({
+          ...defaultOptions(mock.factory),
+          authProvider: () => ({
+            mechanism: "PLAIN",
+            username: "sync-user",
+            password: "sync-pass"
+          })
+        })
+        await conn.connect()
+
+        await conn.authenticate()
+
+        expect(writtenText(mock.written[1])).toContain("sync-user")
+      })
+
+      it("takes precedence over static SASL config", async () => {
+        const mock = createAutoRespondingMock(plainExchange())
+        conn = new KafkaConnection({
+          ...defaultOptions(mock.factory),
+          sasl: { mechanism: "PLAIN", username: "static-user", password: "static-pass" },
+          authProvider: async () => ({
+            mechanism: "PLAIN",
+            username: "provider-user",
+            password: "provider-pass"
+          })
+        })
+        await conn.connect()
+
+        await conn.authenticate()
+
+        const sent = writtenText(mock.written[1])
+        expect(sent).toContain("provider-user")
+        expect(sent).not.toContain("static-user")
+      })
+
+      it("is resolved per connection, so a replacement adopts a rotated secret", async () => {
+        const passwords = ["secret-1", "secret-2"]
+        let call = 0
+        const provider = vi.fn(async () => ({
+          mechanism: "PLAIN" as const,
+          username: "rotating-user",
+          password: passwords[call++]
+        }))
+
+        const first = createAutoRespondingMock(plainExchange())
+        const original = new KafkaConnection({
+          ...defaultOptions(first.factory),
+          authProvider: provider
+        })
+        await original.connect()
+        await original.authenticate()
+        await original.close()
+
+        // A reconnect builds a fresh connection over the same provider.
+        const second = createAutoRespondingMock(plainExchange())
+        conn = new KafkaConnection({
+          ...defaultOptions(second.factory),
+          authProvider: provider
+        })
+        await conn.connect()
+
+        await conn.authenticate()
+
+        expect(provider).toHaveBeenCalledTimes(2)
+        expect(writtenText(first.written[1])).toContain("secret-1")
+        expect(writtenText(second.written[1])).toContain("secret-2")
+      })
+
+      it("propagates a provider failure without sending a request", async () => {
+        const mock = createMockSocketFactory()
+        conn = new KafkaConnection({
+          ...defaultOptions(mock.factory),
+          authProvider: async () => {
+            throw new Error("token endpoint unavailable")
+          }
+        })
+        await conn.connect()
+
+        await expect(conn.authenticate()).rejects.toThrow("token endpoint unavailable")
+        expect(mock.written.length).toBe(0)
+      })
+    })
   })
 })

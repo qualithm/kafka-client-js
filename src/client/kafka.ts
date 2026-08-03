@@ -260,6 +260,7 @@ export class Kafka {
       clientId: options.config.clientId,
       tls: options.config.tls,
       sasl: options.config.sasl,
+      authProvider: options.config.authProvider,
       connectTimeoutMs: options.config.connectionTimeoutMs,
       requestTimeoutMs: options.config.requestTimeoutMs,
       maxConnectionsPerBroker: options.maxConnectionsPerBroker,

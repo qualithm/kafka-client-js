@@ -18,7 +18,7 @@ import { ApiKey } from "../codec/api-keys.js"
 import { BinaryReader } from "../codec/binary-reader.js"
 import type { BinaryWriter } from "../codec/binary-writer.js"
 import { decodeResponseHeader, frameRequest } from "../codec/protocol-framing.js"
-import type { SaslConfig, TlsConfig } from "../config.js"
+import type { SaslAuthProvider, SaslConfig, TlsConfig } from "../config.js"
 import { KafkaConnectionError, KafkaTimeoutError } from "../errors.js"
 import {
   decodeSaslAuthenticateResponse,
@@ -55,6 +55,8 @@ export type ConnectionOptions = {
   readonly requestTimeoutMs?: number
   /** SASL authentication configuration. */
   readonly sasl?: SaslConfig
+  /** Resolves SASL credentials on each authentication. Takes precedence over `sasl`. */
+  readonly authProvider?: SaslAuthProvider
 }
 
 /** @internal */
@@ -201,6 +203,7 @@ export class KafkaConnection {
   private readonly socketFactory: SocketFactory
   private readonly tls?: TlsConfig
   private readonly sasl?: SaslConfig
+  private readonly authProvider?: SaslAuthProvider
   private readonly connectTimeoutMs: number
   private readonly requestTimeoutMs: number
 
@@ -211,6 +214,7 @@ export class KafkaConnection {
     this.socketFactory = options.socketFactory
     this.tls = options.tls
     this.sasl = options.sasl
+    this.authProvider = options.authProvider
     this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
   }
@@ -354,14 +358,20 @@ export class KafkaConnection {
    * Uses SaslHandshake (v1) to negotiate the mechanism, then SaslAuthenticate
    * to exchange authentication tokens.
    *
+   * When an auth provider is configured it is invoked here rather than at
+   * construction, so each connection — including a replacement created after a
+   * disconnect — authenticates with freshly resolved credentials.
+   *
    * @throws {KafkaConnectionError} If authentication fails.
    */
   async authenticate(): Promise<void> {
-    if (!this.sasl) {
+    const provider = this.authProvider
+    const sasl = provider === undefined ? this.sasl : await provider()
+    if (!sasl) {
       return
     }
 
-    const authenticator = createSaslAuthenticator(this.sasl)
+    const authenticator = createSaslAuthenticator(sasl)
 
     // Step 1: SaslHandshake — negotiate mechanism
     const handshakeReader = await this.send(ApiKey.SaslHandshake, 1, (writer) => {
