@@ -15,7 +15,7 @@
  */
 
 import { ApiKey, negotiateVersion } from "../codec/api-keys.js"
-import type { BrokerAddress, SaslConfig, TlsConfig } from "../config.js"
+import type { BrokerAddress, SaslAuthProvider, SaslConfig, TlsConfig } from "../config.js"
 import { KafkaConnectionError } from "../errors.js"
 import { apiVersionsToMap, decodeApiVersionsResponse } from "../protocol/api-versions.js"
 import {
@@ -76,6 +76,8 @@ export type ConnectionPoolOptions = {
   readonly tls?: TlsConfig
   /** SASL authentication configuration. */
   readonly sasl?: SaslConfig
+  /** Resolves SASL credentials on each connection attempt. Takes precedence over `sasl`. */
+  readonly authProvider?: SaslAuthProvider
   /** Connection timeout in milliseconds (default: 30000). */
   readonly connectTimeoutMs?: number
   /** Per-request timeout in milliseconds (default: 30000). */
@@ -131,6 +133,7 @@ export async function discoverBrokers(
     readonly clientId?: string
     readonly tls?: TlsConfig
     readonly sasl?: SaslConfig
+    readonly authProvider?: SaslAuthProvider
     readonly connectTimeoutMs?: number
     readonly requestTimeoutMs?: number
   }
@@ -149,6 +152,7 @@ export async function discoverBrokers(
       clientId: options?.clientId,
       tls: options?.tls,
       sasl: options?.sasl,
+      authProvider: options?.authProvider,
       connectTimeoutMs: options?.connectTimeoutMs,
       requestTimeoutMs: options?.requestTimeoutMs
     })
@@ -279,6 +283,7 @@ export class ConnectionPool {
   private readonly clientId?: string
   private readonly tls?: TlsConfig
   private readonly sasl?: SaslConfig
+  private readonly authProvider?: SaslAuthProvider
   private readonly connectTimeoutMs?: number
   private readonly requestTimeoutMs?: number
   private readonly maxConnectionsPerBroker: number
@@ -290,6 +295,7 @@ export class ConnectionPool {
     this.clientId = options.clientId
     this.tls = options.tls
     this.sasl = options.sasl
+    this.authProvider = options.authProvider
     this.connectTimeoutMs = options.connectTimeoutMs
     this.requestTimeoutMs = options.requestTimeoutMs
     this.maxConnectionsPerBroker =
@@ -331,6 +337,7 @@ export class ConnectionPool {
       clientId: this.clientId,
       tls: this.tls,
       sasl: this.sasl,
+      authProvider: this.authProvider,
       connectTimeoutMs: this.connectTimeoutMs,
       requestTimeoutMs: this.requestTimeoutMs
     })
@@ -369,6 +376,7 @@ export class ConnectionPool {
       clientId: this.clientId,
       tls: this.tls,
       sasl: this.sasl,
+      authProvider: this.authProvider,
       connectTimeoutMs: this.connectTimeoutMs,
       requestTimeoutMs: this.requestTimeoutMs
     })
@@ -556,6 +564,7 @@ export class ConnectionPool {
       clientId: this.clientId,
       tls: this.tls,
       sasl: this.sasl,
+      authProvider: this.authProvider,
       connectTimeoutMs: this.connectTimeoutMs,
       requestTimeoutMs: this.requestTimeoutMs
     })
