@@ -32,6 +32,15 @@ export type SaslConfig = {
 }
 
 /**
+ * Resolves SASL credentials each time a connection authenticates.
+ *
+ * SASL authenticates the connection rather than the request, so the provider is
+ * called on every connect and reconnect. A rotated credential is therefore
+ * adopted by the next connection without restarting the client.
+ */
+export type SaslAuthProvider = () => SaslConfig | Promise<SaslConfig>
+
+/**
  * TLS configuration for encrypted connections.
  */
 export type TlsConfig = {
@@ -61,6 +70,11 @@ export type KafkaConfig = {
   readonly requestTimeoutMs?: number
   /** SASL authentication configuration. */
   readonly sasl?: SaslConfig
+  /**
+   * Resolves SASL credentials on each connection attempt, for rotating
+   * credentials. Takes precedence over {@link KafkaConfig.sasl} when both are set.
+   */
+  readonly authProvider?: SaslAuthProvider
   /** TLS configuration. */
   readonly tls?: TlsConfig
 }

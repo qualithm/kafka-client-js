@@ -14,7 +14,7 @@ protocol directly for producing, consuming, and administering Kafka clusters.
 - **Producer** — batching, partitioning (murmur2/round-robin/custom), retries, idempotent mode
 - **Consumer** — group coordination, offset management, rebalance listeners, auto-commit
 - **Admin** — topic/partition CRUD, config describe/alter
-- **SASL authentication** — PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+- **SASL authentication** — PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, with rotating credentials
 - **SSL/TLS** — mutual TLS support via runtime socket adapters
 - **Serialisation** — built-in JSON/string, pluggable Avro and Protobuf via Schema Registry
 - **Compression** — gzip, snappy, lz4, zstd
@@ -117,6 +117,30 @@ const socketFactory = createNodeSocketFactory()
 import { createDenoSocketFactory } from "@qualithm/kafka-client"
 const socketFactory = createDenoSocketFactory()
 ```
+
+### Rotating Credentials
+
+Pass an `authProvider` instead of a static `sasl` block when the credential is short-lived. It is
+called on every connection attempt — including the reconnects the pool performs after a broker drops
+— so a rotated secret is adopted without restarting the client or triggering a consumer-group
+rebalance.
+
+```ts
+const kafka = createKafka({
+  config: {
+    brokers: ["localhost:9092"],
+    authProvider: async () => {
+      const { username, password } = await vault.read("kafka/creds")
+      return { mechanism: "SCRAM-SHA-512", username, password }
+    }
+  },
+  socketFactory: createNodeSocketFactory()
+})
+```
+
+The provider may be synchronous or asynchronous, and takes precedence over `sasl` when both are set.
+Cache the credential yourself if resolving it is expensive — it is resolved once per connection, not
+once per request.
 
 ### Compression
 

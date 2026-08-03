@@ -24,7 +24,14 @@ export {
 } from "./errors.js"
 
 // Configuration
-export type { BrokerAddress, KafkaConfig, SaslConfig, SaslMechanism, TlsConfig } from "./config.js"
+export type {
+  BrokerAddress,
+  KafkaConfig,
+  SaslAuthProvider,
+  SaslConfig,
+  SaslMechanism,
+  TlsConfig
+} from "./config.js"
 export { parseBrokerAddress } from "./config.js"
 
 // Messages

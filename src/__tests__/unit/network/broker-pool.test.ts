@@ -161,6 +161,16 @@ function createAutoRespondingSocketFactory(
           queueMicrotask(() => {
             ctx.callbacks?.onData(response)
           })
+        } else if (apiKey === ApiKey.SaslHandshake) {
+          const response = buildMockResponse(correlationId, buildSaslHandshakeResponseBody())
+          queueMicrotask(() => {
+            ctx.callbacks?.onData(response)
+          })
+        } else if (apiKey === ApiKey.SaslAuthenticate) {
+          const response = buildMockResponse(correlationId, buildSaslAuthenticateResponseBody())
+          queueMicrotask(() => {
+            ctx.callbacks?.onData(response)
+          })
         }
       },
       close: async () => {}
@@ -170,6 +180,25 @@ function createAutoRespondingSocketFactory(
   }
 
   return ctx
+}
+
+/** Build a SaslHandshake v1 response body advertising PLAIN. */
+function buildSaslHandshakeResponseBody(): Uint8Array {
+  const w = new BinaryWriter()
+  w.writeInt16(0)
+  w.writeInt32(1)
+  w.writeString("PLAIN")
+  return w.finish()
+}
+
+/** Build a successful SaslAuthenticate v1 response body. */
+function buildSaslAuthenticateResponseBody(): Uint8Array {
+  const w = new BinaryWriter()
+  w.writeInt16(0)
+  w.writeString(null)
+  w.writeBytes(new Uint8Array(0))
+  w.writeInt64(0n)
+  return w.finish()
 }
 
 /**
@@ -1069,6 +1098,43 @@ describe("ConnectionPool", () => {
       expect(connectCount).toBe(2)
 
       pool.releaseConnection(newConn)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // SASL auth provider
+  // -----------------------------------------------------------------------
+
+  describe("auth provider", () => {
+    it("resolves credentials for discovery and for every pooled connection", async () => {
+      const passwords = ["secret-1", "secret-2"]
+      let calls = 0
+      const mock = createAutoRespondingSocketFactory([
+        { nodeId: 1, host: "localhost", port: 9092, rack: null }
+      ])
+
+      pool = new ConnectionPool({
+        ...defaultPoolOptions(mock.factory),
+        authProvider: async () => ({
+          mechanism: "PLAIN" as const,
+          username: "rotating-user",
+          password: passwords[Math.min(calls++, passwords.length - 1)]
+        })
+      })
+
+      // Discovery authenticates its own bootstrap connection.
+      await pool.connect()
+      expect(calls).toBe(1)
+
+      // A pooled connection resolves the credential again, so a rotation that
+      // happened since discovery is picked up without restarting the client.
+      const conn = await pool.getConnection("localhost", 9092)
+      pool.releaseConnection(conn)
+      expect(calls).toBe(2)
+
+      const sent = mock.written.map((frame) => new TextDecoder().decode(frame))
+      expect(sent.some((request) => request.includes("secret-1"))).toBe(true)
+      expect(sent.some((request) => request.includes("secret-2"))).toBe(true)
     })
   })
 })
