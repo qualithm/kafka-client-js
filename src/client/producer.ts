@@ -57,6 +57,7 @@ import {
   decodeTxnOffsetCommitResponse,
   encodeTxnOffsetCommitRequest
 } from "../protocol/txn-offset-commit.js"
+import { retryWhileNotReady } from "./not-ready.js"
 import { type TelemetryConfig, TelemetryReporter } from "./telemetry.js"
 
 // ---------------------------------------------------------------------------
@@ -651,7 +652,7 @@ export class KafkaProducer {
     // Step 1: Tell coordinator this txn includes offsets for this group
     await this.sendAddOffsetsToTxn(groupId)
     // Step 2: Find the group coordinator and commit offsets
-    const groupConn = await this.findGroupCoordinator(groupId)
+    const groupConn = await retryWhileNotReady(async () => this.findGroupCoordinator(groupId))
     try {
       await this.sendTxnOffsetCommit(groupConn, offsets, groupId)
     } finally {
@@ -680,7 +681,15 @@ export class KafkaProducer {
     if (this.producerIdPromise) {
       return this.producerIdPromise
     }
-    this.producerIdPromise = this.initProducerId()
+    // A just-started broker answers with coordinator-loading codes until its
+    // transaction state is ready; a NOT_COORDINATOR means the cached one moved.
+    this.producerIdPromise = retryWhileNotReady(
+      async () => this.initProducerId(),
+      () => {
+        this.coordinatorHost = null
+        this.coordinatorPort = null
+      }
+    )
     try {
       await this.producerIdPromise
     } finally {
@@ -917,7 +926,7 @@ export class KafkaProducer {
    * Get a connection to the transaction coordinator.
    */
   private async getCoordinatorConnection(): Promise<KafkaConnection> {
-    await this.findTransactionCoordinator()
+    await retryWhileNotReady(async () => this.findTransactionCoordinator())
     if (this.coordinatorHost === null || this.coordinatorPort === null) {
       throw new KafkaConnectionError("transaction coordinator not found", { retriable: true })
     }
@@ -1618,7 +1627,9 @@ export class KafkaProducer {
       return cached
     }
 
-    return this.refreshTopicMetadata(topic)
+    // A topic created moments ago can report UNKNOWN_TOPIC_OR_PARTITION until
+    // its metadata propagates.
+    return retryWhileNotReady(async () => this.refreshTopicMetadata(topic))
   }
 
   /**

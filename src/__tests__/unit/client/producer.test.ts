@@ -832,7 +832,7 @@ describe("KafkaProducer send (integration path)", () => {
       buildApiVersionsBody(STANDARD_APIS),
       buildMetadataV1Body(TEST_BROKERS, [
         {
-          errorCode: 3, // UNKNOWN_TOPIC_OR_PARTITION
+          errorCode: 17, // INVALID_TOPIC_EXCEPTION
           name: "bad-topic",
           isInternal: false,
           partitions: []
@@ -1086,7 +1086,7 @@ describe("KafkaProducer send (integration path)", () => {
       buildApiVersionsBody(STANDARD_APIS),
       buildMetadataV1Body(TEST_BROKERS, [
         {
-          errorCode: 5, // LEADER_NOT_AVAILABLE — retriable
+          errorCode: 6, // NOT_LEADER_OR_FOLLOWER — retriable, left to the caller's retries
           name: "meta-err",
           isInternal: false,
           partitions: []
@@ -2272,7 +2272,7 @@ describe("KafkaProducer idempotent", () => {
   it("throws when InitProducerId returns error code", async () => {
     const initPidConn = createMockConnection([
       buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
-      buildInitProducerIdBody(-1n, -1, 15) // NOT_COORDINATOR
+      buildInitProducerIdBody(-1n, -1, 53) // TRANSACTIONAL_ID_AUTHORIZATION_FAILED
     ])
 
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
@@ -2819,7 +2819,7 @@ describe("KafkaProducer transactional", () => {
   it("throws when FindCoordinator returns error", async () => {
     const coordinatorConn = createMockConnection([
       buildApiVersionsBody(txnApis),
-      buildFindCoordinatorBody(0, "", 0, 15) // NOT_COORDINATOR error
+      buildFindCoordinatorBody(0, "", 0, 53) // TRANSACTIONAL_ID_AUTHORIZATION_FAILED
     ])
 
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))

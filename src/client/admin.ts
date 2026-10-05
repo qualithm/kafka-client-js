@@ -316,6 +316,24 @@ export class KafkaAdmin {
    * @throws {KafkaConnectionError} If connection or version negotiation fails.
    */
   async createTopics(request: CreateTopicsRequest): Promise<readonly CreateTopicsTopicResponse[]> {
+    const topics = await this.sendCreateTopics(request)
+    if (request.validateOnly !== true) {
+      const expected = new Map<string, number>()
+      for (const topic of topics) {
+        if (topic.errorCode === 0) {
+          const requested = request.topics.find((t) => t.name === topic.name)?.numPartitions ?? -1
+          const created = topic.numPartitions
+          expected.set(topic.name, Math.max(created, requested, 1))
+        }
+      }
+      await this.awaitPartitions(expected, request.timeoutMs)
+    }
+    return topics
+  }
+
+  private async sendCreateTopics(
+    request: CreateTopicsRequest
+  ): Promise<readonly CreateTopicsTopicResponse[]> {
     return this.withRetry(async () => {
       const { conn, apiVersion } = await this.getControllerConnection(ApiKey.CreateTopics)
       try {
@@ -347,6 +365,19 @@ export class KafkaAdmin {
    * @throws {KafkaConnectionError} If connection or version negotiation fails.
    */
   async deleteTopics(request: DeleteTopicsRequest): Promise<readonly DeleteTopicsTopicResponse[]> {
+    const topics = await this.sendDeleteTopics(request)
+    const deleted = topics.flatMap((t) => (t.errorCode === 0 && t.name !== null ? [t.name] : []))
+    await this.awaitTopicMetadata(
+      deleted,
+      request.timeoutMs,
+      (_name, topic) => topic === undefined || topic.errorCode === UNKNOWN_TOPIC_OR_PARTITION
+    )
+    return topics
+  }
+
+  private async sendDeleteTopics(
+    request: DeleteTopicsRequest
+  ): Promise<readonly DeleteTopicsTopicResponse[]> {
     return this.withRetry(async () => {
       const { conn, apiVersion } = await this.getControllerConnection(ApiKey.DeleteTopics)
       try {
@@ -414,6 +445,23 @@ export class KafkaAdmin {
    * @throws {KafkaConnectionError} If connection or version negotiation fails.
    */
   async createPartitions(
+    request: CreatePartitionsRequest
+  ): Promise<readonly CreatePartitionsTopicResponse[]> {
+    const topics = await this.sendCreatePartitions(request)
+    if (request.validateOnly !== true) {
+      const expected = new Map<string, number>()
+      for (const topic of topics) {
+        const requested = request.topics.find((t) => t.name === topic.name)
+        if (topic.errorCode === 0 && requested !== undefined) {
+          expected.set(topic.name, requested.count)
+        }
+      }
+      await this.awaitPartitions(expected, request.timeoutMs)
+    }
+    return topics
+  }
+
+  private async sendCreatePartitions(
     request: CreatePartitionsRequest
   ): Promise<readonly CreatePartitionsTopicResponse[]> {
     return this.withRetry(async () => {
@@ -518,7 +566,7 @@ export class KafkaAdmin {
     return this.withRetry(async () => {
       const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.Metadata)
       try {
-        const metadataRequest: MetadataRequest = { topics: null }
+        const metadataRequest: MetadataRequest = { topics: null, allowAutoTopicCreation: false }
         const responseReader = await conn.send(ApiKey.Metadata, apiVersion, (writer) => {
           encodeMetadataRequest(writer, metadataRequest, apiVersion)
         })
@@ -549,8 +597,10 @@ export class KafkaAdmin {
     return this.withRetry(async () => {
       const { conn, apiVersion } = await this.getAnyBrokerConnection(ApiKey.Metadata)
       try {
+        // An admin read must never create the topic it asks about.
         const metadataRequest: MetadataRequest = {
-          topics: topicNames.map((name) => ({ name }))
+          topics: topicNames.map((name) => ({ name })),
+          allowAutoTopicCreation: false
         }
         const responseReader = await conn.send(ApiKey.Metadata, apiVersion, (writer) => {
           encodeMetadataRequest(writer, metadataRequest, apiVersion)
@@ -1629,6 +1679,63 @@ export class KafkaAdmin {
   // Internal — retry & lifecycle
   // -------------------------------------------------------------------------
 
+  /**
+   * Wait until broker metadata agrees with a topic change. CreateTopics,
+   * CreatePartitions and DeleteTopics return once the controller commits the
+   * change, before the brokers apply it, so a read straight after would not
+   * see it yet.
+   *
+   * @param names - the topics the change touched
+   * @param timeoutMs - the request's timeout; 0 or less skips the wait
+   * @param applied - whether a topic's metadata (undefined if absent) reflects the change
+   * @throws {KafkaError} If the change is not visible within `timeoutMs`.
+   */
+  private async awaitTopicMetadata(
+    names: readonly string[],
+    timeoutMs: number,
+    applied: (name: string, topic: MetadataTopic | undefined) => boolean
+  ): Promise<void> {
+    if (names.length === 0 || timeoutMs <= 0) {
+      return
+    }
+    const deadline = Date.now() + timeoutMs
+    for (let delay = 50; ; delay = Math.min(delay * 2, 500)) {
+      const topics = await this.describeTopics(names)
+      if (
+        names.every((name) =>
+          applied(
+            name,
+            topics.find((t) => t.name === name)
+          )
+        )
+      ) {
+        return
+      }
+      if (Date.now() + delay > deadline) {
+        throw new KafkaError(
+          `topic metadata not updated within ${String(timeoutMs)}ms: ${names.join(", ")}`,
+          true
+        )
+      }
+      await sleep(delay)
+    }
+  }
+
+  /** Wait until each topic has at least the given partition count, every partition led. */
+  private async awaitPartitions(
+    expected: ReadonlyMap<string, number>,
+    timeoutMs: number
+  ): Promise<void> {
+    await this.awaitTopicMetadata([...expected.keys()], timeoutMs, (name, topic) => {
+      const minPartitions = expected.get(name) ?? 1
+      return (
+        topic?.errorCode === 0 &&
+        topic.partitions.length >= minPartitions &&
+        topic.partitions.every((p) => p.leaderId >= 0)
+      )
+    })
+  }
+
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -1671,6 +1778,9 @@ export function createAdmin(options: AdminOptions): KafkaAdmin {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Kafka error code for a topic the broker does not know. */
+const UNKNOWN_TOPIC_OR_PARTITION = 3
 
 function toTopicInfo(topic: MetadataTopic): TopicInfo {
   return {
