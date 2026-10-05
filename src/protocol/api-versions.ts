@@ -261,7 +261,7 @@ export function decodeApiVersionsResponse(
 // ---------------------------------------------------------------------------
 
 /**
- * Convert an ApiVersionsResponse to a map for easy lookup.
+ * Convert an ApiVersionsResponse to a map keyed by API key.
  *
  * @param response - The decoded ApiVersions response.
  * @returns A map from API key to version range.

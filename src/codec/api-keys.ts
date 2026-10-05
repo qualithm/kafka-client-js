@@ -179,7 +179,7 @@ export const CLIENT_API_VERSIONS: Partial<Record<ApiKey, ApiVersionRange>> = {
  * The API version at which each API transitions to flexible headers (KIP-482).
  * `null` means the API never uses flexible headers within the versions we support.
  *
- * @see https://cwiki.apache.org/confluence/display/KAFKA/KIP-482
+ * @see https://cwiki.apache.org/confluence/display/KAFKA/KIP-482%3A+The+Kafka+Protocol+should+Support+Optional+Tagged+Fields
  */
 export const FLEXIBLE_VERSION_THRESHOLDS: Partial<Record<ApiKey, number | null>> = {
   [ApiKey.ApiVersions]: 3,
