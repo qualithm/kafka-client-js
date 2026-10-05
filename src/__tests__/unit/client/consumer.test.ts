@@ -677,6 +677,74 @@ describe("KafkaConsumer", () => {
       await consumer.close()
     })
 
+    it("rejoins as a new member and waits out a moving coordinator", async () => {
+      const assignmentBytes = buildConsumerProtocolAssignment([
+        { topic: "test-topic", partitions: [0] }
+      ])
+
+      const conn = createMockConnection([
+        // Attempt 1: the coordinator no longer knows the member
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(25, -1, "", "", "", []), // UNKNOWN_MEMBER_ID
+        // Attempt 2: the coordinator moved
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(16, -1, "", "", "", []), // NOT_COORDINATOR
+        // Attempt 3 succeeds
+        buildApiVersionsBody(STANDARD_APIS),
+        buildFindCoordinatorV0Body(0, 1, "localhost", 9092),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildJoinGroupV0Body(0, 1, "range", "leader-1", "member-1", []),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildSyncGroupV0Body(0, assignmentBytes),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildMetadataV1Body(
+          [{ nodeId: 1, host: "localhost", port: 9092 }],
+          [
+            {
+              errorCode: 0,
+              name: "test-topic",
+              isInternal: false,
+              partitions: [
+                { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+              ]
+            }
+          ]
+        ),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildOffsetFetchV0Body([
+          {
+            name: "test-topic",
+            partitions: [{ partitionIndex: 0, committedOffset: 5n, metadata: null, errorCode: 0 }]
+          }
+        ])
+      ])
+
+      const pool = createMockPool({
+        brokers: new Map([[1, { nodeId: 1, host: "localhost", port: 9092, rack: null }]]),
+        getConnectionByNodeId: vi.fn(async () =>
+          Promise.resolve(conn)
+        ) as unknown as ConnectionPool["getConnectionByNodeId"],
+        releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+      })
+
+      const consumer = new KafkaConsumer(
+        defaultConsumerOptions({
+          connectionPool: pool,
+          autoCommit: false,
+          heartbeatIntervalMs: 100_000
+        })
+      )
+      consumer.subscribe(["test-topic"])
+      await consumer.connect()
+
+      expect(consumer.partitions).toEqual([{ topic: "test-topic", partition: 0 }])
+      await consumer.close()
+    })
+
     it("throws when offset reset strategy is none and no committed offset", async () => {
       // Build a flow where committedOffset = -1 and offsetReset = None
       const assignmentBytes = buildConsumerProtocolAssignment([

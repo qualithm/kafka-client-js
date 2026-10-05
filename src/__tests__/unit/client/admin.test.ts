@@ -226,6 +226,27 @@ function buildMetadataV1Body(
   return w.finish()
 }
 
+/** Metadata for one topic with `partitions` partitions led by broker 1, or a topic-level error. */
+function buildTopicMetadataBody(name: string, partitions: number, errorCode = 0): Uint8Array {
+  return buildMetadataV1Body(
+    [{ nodeId: 1, host: "localhost", port: 9092 }],
+    [
+      {
+        errorCode,
+        name,
+        isInternal: false,
+        partitions: Array.from({ length: partitions }, (_, partitionIndex) => ({
+          errorCode: 0,
+          partitionIndex,
+          leaderId: 1,
+          replicaNodes: [1],
+          isrNodes: [1]
+        }))
+      }
+    ]
+  )
+}
+
 // ---------------------------------------------------------------------------
 // KafkaAdmin — constructor and createAdmin
 // ---------------------------------------------------------------------------
@@ -247,7 +268,9 @@ describe("KafkaAdmin", () => {
     it("creates topics via the controller", async () => {
       const conn = createMockConnection([
         buildApiVersionsBody(STANDARD_APIS),
-        buildCreateTopicsResponseBody()
+        buildCreateTopicsResponseBody(),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildTopicMetadataBody("new-topic", 1)
       ])
       const pool = poolWithConn(conn)
       const admin = new KafkaAdmin({ connectionPool: pool })
@@ -260,7 +283,73 @@ describe("KafkaAdmin", () => {
       expect(topics).toHaveLength(1)
       expect(topics[0].name).toBe("new-topic")
       expect(topics[0].errorCode).toBe(0)
-      expect(conn.send).toHaveBeenCalledTimes(2) // ApiVersions + CreateTopics
+      // ApiVersions + CreateTopics, then ApiVersions + Metadata to confirm the topic is visible
+      expect(conn.send).toHaveBeenCalledTimes(4)
+    })
+
+    it("waits until broker metadata shows the new topic", async () => {
+      const conn = createMockConnection([
+        buildApiVersionsBody(STANDARD_APIS),
+        buildCreateTopicsResponseBody(),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildTopicMetadataBody("new-topic", 0, 3), // UNKNOWN_TOPIC_OR_PARTITION: not applied yet
+        buildApiVersionsBody(STANDARD_APIS),
+        buildTopicMetadataBody("new-topic", 1)
+      ])
+      const admin = new KafkaAdmin({ connectionPool: poolWithConn(conn) })
+
+      await admin.createTopics({
+        topics: [{ name: "new-topic", numPartitions: 1, replicationFactor: 1 }],
+        timeoutMs: 5000
+      })
+
+      expect(conn.send).toHaveBeenCalledTimes(6)
+    })
+
+    it("throws when the new topic is not visible within the timeout", async () => {
+      const conn = createMockConnection([])
+      let call = 0
+      conn.send = vi.fn(async () => {
+        call++
+        if (call === 2) {
+          return Promise.resolve(new BinaryReader(buildCreateTopicsResponseBody()))
+        }
+        return Promise.resolve(
+          new BinaryReader(
+            call % 2 === 1
+              ? buildApiVersionsBody(STANDARD_APIS)
+              : buildTopicMetadataBody("new-topic", 0, 3)
+          )
+        )
+      })
+      const admin = new KafkaAdmin({ connectionPool: poolWithConn(conn) })
+
+      await expect(
+        admin.createTopics({
+          topics: [{ name: "new-topic", numPartitions: 1, replicationFactor: 1 }],
+          timeoutMs: 60
+        })
+      ).rejects.toThrow("topic metadata not updated within 60ms: new-topic")
+    })
+
+    it("skips the metadata wait for validateOnly and a zero timeout", async () => {
+      for (const request of [
+        { validateOnly: true, timeoutMs: 5000 },
+        { validateOnly: false, timeoutMs: 0 }
+      ]) {
+        const conn = createMockConnection([
+          buildApiVersionsBody(STANDARD_APIS),
+          buildCreateTopicsResponseBody()
+        ])
+        const admin = new KafkaAdmin({ connectionPool: poolWithConn(conn) })
+
+        await admin.createTopics({
+          topics: [{ name: "new-topic", numPartitions: 1, replicationFactor: 1 }],
+          ...request
+        })
+
+        expect(conn.send).toHaveBeenCalledTimes(2)
+      }
     })
   })
 
@@ -272,7 +361,9 @@ describe("KafkaAdmin", () => {
     it("deletes topics via the controller", async () => {
       const conn = createMockConnection([
         buildApiVersionsBody(STANDARD_APIS),
-        buildDeleteTopicsResponseBody()
+        buildDeleteTopicsResponseBody(),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildTopicMetadataBody("old-topic", 0, 3) // gone from metadata
       ])
       const pool = poolWithConn(conn)
       const admin = new KafkaAdmin({ connectionPool: pool })
@@ -296,7 +387,9 @@ describe("KafkaAdmin", () => {
     it("creates partitions via the controller", async () => {
       const conn = createMockConnection([
         buildApiVersionsBody(STANDARD_APIS),
-        buildCreatePartitionsResponseBody()
+        buildCreatePartitionsResponseBody(),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildTopicMetadataBody("grow-topic", 6)
       ])
       const pool = poolWithConn(conn)
       const admin = new KafkaAdmin({ connectionPool: pool })
@@ -1271,11 +1364,14 @@ describe("KafkaAdmin", () => {
           }
           return Promise.reject(new KafkaConnectionError("connection reset", { retriable: true }))
         }
-        if (callCount === 3) {
+        if (callCount === 3 || callCount === 5) {
           return Promise.resolve(new BinaryReader(buildApiVersionsBody(STANDARD_APIS)))
         }
-        // Fourth call: CreateTopics succeeds
-        return Promise.resolve(new BinaryReader(buildCreateTopicsResponseBody()))
+        if (callCount === 4) {
+          return Promise.resolve(new BinaryReader(buildCreateTopicsResponseBody()))
+        }
+        // Sixth call: the metadata wait sees the new topic
+        return Promise.resolve(new BinaryReader(buildTopicMetadataBody("new-topic", 1)))
       })
 
       const pool = poolWithConn(conn)
@@ -1291,7 +1387,7 @@ describe("KafkaAdmin", () => {
 
       expect(topics).toHaveLength(1)
       expect(topics[0].name).toBe("new-topic")
-      expect(callCount).toBe(4) // 2 calls per attempt × 2 attempts
+      expect(callCount).toBe(6) // 2 calls per attempt × 2 attempts, then the metadata wait
     })
 
     it("does not retry non-retriable errors", async () => {
@@ -1655,7 +1751,9 @@ describe("KafkaAdmin", () => {
     it("releases connection after success", async () => {
       const conn = createMockConnection([
         buildApiVersionsBody(STANDARD_APIS),
-        buildCreateTopicsResponseBody()
+        buildCreateTopicsResponseBody(),
+        buildApiVersionsBody(STANDARD_APIS),
+        buildTopicMetadataBody("new-topic", 1)
       ])
       const releaseSpy = vi.fn()
       const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))

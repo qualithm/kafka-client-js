@@ -832,7 +832,7 @@ describe("KafkaProducer send (integration path)", () => {
       buildApiVersionsBody(STANDARD_APIS),
       buildMetadataV1Body(TEST_BROKERS, [
         {
-          errorCode: 3, // UNKNOWN_TOPIC_OR_PARTITION
+          errorCode: 17, // INVALID_TOPIC_EXCEPTION
           name: "bad-topic",
           isInternal: false,
           partitions: []
@@ -1086,7 +1086,7 @@ describe("KafkaProducer send (integration path)", () => {
       buildApiVersionsBody(STANDARD_APIS),
       buildMetadataV1Body(TEST_BROKERS, [
         {
-          errorCode: 5, // LEADER_NOT_AVAILABLE — retriable
+          errorCode: 6, // NOT_LEADER_OR_FOLLOWER — retriable, left to the caller's retries
           name: "meta-err",
           isInternal: false,
           partitions: []
@@ -2240,6 +2240,54 @@ describe("KafkaProducer idempotent", () => {
     expect(initPidConn.send).toHaveBeenCalledTimes(2)
   })
 
+  it("retries InitProducerId while the coordinator is still loading", async () => {
+    const initPidConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(-1n, -1, 14), // COORDINATOR_LOAD_IN_PROGRESS
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildInitProducerIdBody(1000n, 0)
+    ])
+    const metadataConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildMetadataV1Body(TEST_BROKERS, [
+        {
+          errorCode: 0,
+          name: "loading",
+          isInternal: false,
+          partitions: [
+            { errorCode: 0, partitionIndex: 0, leaderId: 1, replicaNodes: [1], isrNodes: [1] }
+          ]
+        }
+      ])
+    ])
+    const produceConn = createMockConnection([
+      buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
+      buildProduceResponseBody(
+        [{ name: "loading", partitions: [{ partitionIndex: 0, errorCode: 0, baseOffset: 1n }] }],
+        8
+      )
+    ])
+
+    let getConnCall = 0
+    const pool = createMockPool({
+      brokers: new Map([[1, TEST_BROKERS[0]]]),
+      getConnectionByNodeId: vi.fn(async () => {
+        getConnCall++
+        if (getConnCall <= 2) {
+          return Promise.resolve(initPidConn)
+        }
+        return Promise.resolve(getConnCall === 3 ? metadataConn : produceConn)
+      }) as unknown as ConnectionPool["getConnectionByNodeId"],
+      releaseConnection: vi.fn() as ConnectionPool["releaseConnection"]
+    })
+
+    const producer = new KafkaProducer({ connectionPool: pool, idempotent: true })
+    const results = await producer.send("loading", [{ key: null, value: encoder.encode("x") }])
+
+    expect(results).toHaveLength(1)
+    expect(initPidConn.send).toHaveBeenCalledTimes(4)
+  })
+
   it("sets default maxRetries to 5 for idempotent producer", () => {
     const pool = createMockPool()
     const producer = new KafkaProducer({
@@ -2272,7 +2320,7 @@ describe("KafkaProducer idempotent", () => {
   it("throws when InitProducerId returns error code", async () => {
     const initPidConn = createMockConnection([
       buildApiVersionsBody(STANDARD_APIS_WITH_INIT_PID),
-      buildInitProducerIdBody(-1n, -1, 15) // NOT_COORDINATOR
+      buildInitProducerIdBody(-1n, -1, 53) // TRANSACTIONAL_ID_AUTHORIZATION_FAILED
     ])
 
     const brokerMap = new Map([[1, TEST_BROKERS[0]]])
@@ -2819,7 +2867,7 @@ describe("KafkaProducer transactional", () => {
   it("throws when FindCoordinator returns error", async () => {
     const coordinatorConn = createMockConnection([
       buildApiVersionsBody(txnApis),
-      buildFindCoordinatorBody(0, "", 0, 15) // NOT_COORDINATOR error
+      buildFindCoordinatorBody(0, "", 0, 53) // TRANSACTIONAL_ID_AUTHORIZATION_FAILED
     ])
 
     const brokerMap = new Map(TEST_BROKERS.map((b) => [b.nodeId, b]))
