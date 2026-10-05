@@ -1,6 +1,6 @@
 {
   "name": "@qualithm/kafka-client",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Native Apache Kafka client for JavaScript and TypeScript runtimes.",
   "private": false,
   "type": "module",
@@ -66,6 +66,7 @@
     "test:coverage": "vitest run --coverage",
     "test:coverage:unit": "vitest run --coverage src/__tests__/unit",
     "test:integration": "vitest run src/__tests__/integration",
+    "test:integration:ci": "bun run test:integration:kafka && docker compose --profile kafka down && bun run test:integration:redpanda && docker compose --profile redpanda down",
     "test:integration:redpanda": "docker compose --profile redpanda up -d --wait && vitest run src/__tests__/integration",
     "test:integration:kafka": "docker compose --profile kafka up -d --wait && vitest run src/__tests__/integration",
     "test:integration:sasl": "docker compose --profile kafka-sasl up -d && sleep 25 && KAFKA_SASL_PORT=9094 vitest run src/__tests__/integration/sasl.test.ts",
