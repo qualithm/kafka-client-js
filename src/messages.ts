@@ -1,7 +1,7 @@
 /**
  * Core message and partition types for the Kafka client.
  *
- * Uses `Uint8Array` exclusively per locked decision #2.
+ * Keys, values and header values are `Uint8Array`.
  *
  * @packageDocumentation
  */
@@ -40,8 +40,6 @@ export type MessageHeader = {
 
 /**
  * A Kafka message to be produced or that has been consumed.
- *
- * Key and value use `Uint8Array` per locked decision #2.
  */
 export type Message = {
   /** Optional message key for partitioning. `null` means no key. */

@@ -1,8 +1,6 @@
 /**
- * Testing utilities for Kafka Client.
- *
- * This subpath export (`@qualithm/kafka-client/testing`) provides utilities
- * for testing code that integrates with the Kafka client library.
+ * Test helpers for code that uses Kafka Client, exported at
+ * `@qualithm/kafka-client/testing`.
  *
  * @packageDocumentation
  */

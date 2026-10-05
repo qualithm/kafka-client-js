@@ -3,7 +3,6 @@
  *
  * Serializers convert typed values to `Uint8Array` for producing, and
  * deserializers convert `Uint8Array` back to typed values for consuming.
- * Uses `Uint8Array` exclusively per locked decision #2.
  *
  * Built-in serializers:
  * - {@link stringSerializer} — UTF-8 string encoding
