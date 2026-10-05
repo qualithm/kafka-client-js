@@ -1,8 +1,6 @@
 /**
- * Compression providers for Kafka record batches.
- *
- * This module provides compression implementations that can be registered
- * with the record batch codec.
+ * Compression providers for Kafka record batches, registered with
+ * `registerCompressionProvider`.
  *
  * Kafka uses specific compression formats:
  * - GZIP: Standard gzip format (RFC 1952)
