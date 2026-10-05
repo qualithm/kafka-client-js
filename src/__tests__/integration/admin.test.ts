@@ -234,18 +234,25 @@ describe("admin: config management", () => {
       ]
     })
 
-    // Verify the change
-    const resources = await admin!.describeConfigs({
-      resources: [
-        {
-          resourceType: ConfigResourceType.Topic,
-          resourceName: topicName,
-          configNames: ["retention.ms"]
-        }
-      ]
-    })
-
-    expect(resources[0].configs[0].value).toBe("86400000")
+    // Verify the change. Brokers apply a config change asynchronously, so a
+    // read straight after the alter can still return the old value.
+    await expect
+      .poll(
+        async () => {
+          const resources = await admin!.describeConfigs({
+            resources: [
+              {
+                resourceType: ConfigResourceType.Topic,
+                resourceName: topicName,
+                configNames: ["retention.ms"]
+              }
+            ]
+          })
+          return resources[0].configs[0]?.value
+        },
+        { timeout: 10_000, interval: 100 }
+      )
+      .toBe("86400000")
   })
 
   it("describes broker configuration", async () => {
@@ -257,7 +264,8 @@ describe("admin: config management", () => {
       resources: [
         {
           resourceType: ConfigResourceType.Broker,
-          resourceName: "1",
+          // apache/kafka runs as node 1 and redpanda as node 0
+          resourceName: String([...kafka!.brokers.keys()][0]),
           configNames: ["log.retention.hours"]
         }
       ]

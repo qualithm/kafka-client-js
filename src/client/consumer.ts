@@ -84,6 +84,7 @@ import {
   type SyncGroupRequest
 } from "../protocol/sync-group.js"
 import { type PartitionAssignor, rangeAssignor } from "./assignors.js"
+import { defaultNotReadyRetry, isNotReadyError, retryWhileNotReady } from "./not-ready.js"
 import { type TelemetryConfig, TelemetryReporter } from "./telemetry.js"
 
 // ---------------------------------------------------------------------------
@@ -618,9 +619,12 @@ export class KafkaConsumer {
    * Join the consumer group with retry for retriable errors.
    */
   private async joinGroupWithRetry(): Promise<void> {
+    const notReadyDeadline = Date.now() + defaultNotReadyRetry.windowMs
     for (let attempt = 0; ; attempt++) {
       try {
-        await this.findCoordinator()
+        // A fresh broker reports the group coordinator as unavailable while it
+        // creates __consumer_offsets, which can outlast the join retries.
+        await retryWhileNotReady(async () => this.findCoordinator())
         if (this.groupProtocol === GroupProtocol.Consumer) {
           await this.kip848Join()
         } else {
@@ -633,6 +637,19 @@ export class KafkaConsumer {
         }
         return
       } catch (error) {
+        // A coordinator that is still loading or has moved gets the not-ready
+        // window; other retriable errors keep the configured retry budget.
+        if (isNotReadyError(error)) {
+          const delay = Math.min(
+            defaultNotReadyRetry.initialDelayMs * 2 ** attempt,
+            defaultNotReadyRetry.maxDelayMs
+          )
+          if (Date.now() + delay > notReadyDeadline) {
+            throw error
+          }
+          await sleep(delay)
+          continue
+        }
         const isRetriable = error instanceof KafkaError && error.retriable
         if (!isRetriable || attempt >= this.maxRetries) {
           throw error
@@ -730,10 +747,15 @@ export class KafkaConsumer {
       }
 
       if (joinResult.value.errorCode !== 0) {
+        // The coordinator no longer knows this member ID, so rejoin as a new member.
+        const unknownMember = joinResult.value.errorCode === ErrorCode.UNKNOWN_MEMBER_ID
+        if (unknownMember) {
+          this.memberId = ""
+        }
         throw new KafkaProtocolError(
           `join group failed with error code ${String(joinResult.value.errorCode)}`,
           joinResult.value.errorCode,
-          isRetriableConsumerError(joinResult.value.errorCode)
+          unknownMember || isRetriableConsumerError(joinResult.value.errorCode)
         )
       }
 
