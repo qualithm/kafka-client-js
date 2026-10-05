@@ -23,7 +23,7 @@ import type { SaslConfig } from "../config.js"
  * A SASL authenticator that produces auth tokens for the SaslAuthenticate API.
  *
  * All mechanisms use the async interface — single-step mechanisms like PLAIN
- * simply resolve immediately in `stepAsync`.
+ * resolve immediately in `stepAsync`.
  */
 export type SaslAuthenticator = {
   /** The mechanism name (e.g. "PLAIN", "SCRAM-SHA-256"). */

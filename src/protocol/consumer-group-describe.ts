@@ -15,7 +15,7 @@
  *        group_state, group_epoch, assignment_epoch, assignor_name,
  *        members[], authorized_operations)
  *
- * @see https://cwiki.apache.org/confluence/display/KAFKA/KIP-848
+ * @see https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol
  * @see https://kafka.apache.org/protocol.html#The_Messages_ConsumerGroupDescribe
  *
  * @packageDocumentation

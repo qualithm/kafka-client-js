@@ -126,6 +126,8 @@ called on every connection attempt — including the reconnects the pool perform
 rebalance.
 
 ```ts
+import { createKafka, createNodeSocketFactory } from "@qualithm/kafka-client"
+
 const kafka = createKafka({
   config: {
     brokers: ["localhost:9092"],
@@ -147,10 +149,17 @@ once per request.
 Register compression providers before producing or consuming compressed record batches:
 
 ```ts
-import { registerCompressionProvider, createSnappyProvider } from "@qualithm/kafka-client"
+import {
+  CompressionCodec,
+  createSnappyProvider,
+  registerCompressionProvider
+} from "@qualithm/kafka-client"
 import snappy from "snappy" // bring your own codec
 
-registerCompressionProvider(createSnappyProvider(snappy))
+registerCompressionProvider(
+  CompressionCodec.SNAPPY,
+  createSnappyProvider({ compressSync: snappy.compressSync, decompressSync: snappy.uncompressSync })
+)
 ```
 
 Available: `gzipProvider`, `deflateProvider`, `createSnappyProvider`, `createLz4Provider`,
@@ -161,14 +170,14 @@ Available: `gzipProvider`, `deflateProvider`, `createSnappyProvider`, `createLz4
 ```ts
 import { SchemaRegistry, createAvroSerde } from "@qualithm/kafka-client"
 
-const registry = new SchemaRegistry({ baseUrl: "http://localhost:8081" })
-const serde = createAvroSerde<MyType>({ registry, subject: "my-topic-value", codec: avroCodec })
+const registry = new SchemaRegistry({ url: "http://localhost:8081" })
+const serde = createAvroSerde<MyType>({ registry, schema: mySchemaJson, codec: avroCodec })
 
 // Serialize for producing
-const encoded = await serde.serialize("my-topic", myData)
+const encoded = await serde.serialize(myData, "my-topic")
 
 // Deserialize when consuming
-const decoded = await serde.deserialize("my-topic", record.message.value!)
+const decoded = await serde.deserialize(record.message.value!, "my-topic")
 ```
 
 ## API Reference
@@ -184,12 +193,12 @@ bun run docs
 
 See the [`examples/`](examples/) directory for runnable examples:
 
-| Example                                               | Description                     |
-| ----------------------------------------------------- | ------------------------------- |
-| [`basic-usage.ts`](examples/basic-usage.ts)           | Connect, produce, and consume   |
-| [`batch-processing.ts`](examples/batch-processing.ts) | Batch produce and consume       |
-| [`produce-consume.ts`](examples/produce-consume.ts)   | End-to-end produce/consume flow |
-| [`error-handling.ts`](examples/error-handling.ts)     | Error handling patterns         |
+| Example                                               | Description                                       |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| [`basic-usage.ts`](examples/basic-usage.ts)           | Core types, broker parsing, version negotiation   |
+| [`batch-processing.ts`](examples/batch-processing.ts) | Construct and encode record batches               |
+| [`produce-consume.ts`](examples/produce-consume.ts)   | End-to-end produce and consume with a live broker |
+| [`error-handling.ts`](examples/error-handling.ts)     | Error hierarchy and type narrowing                |
 
 ```bash
 bun run examples/basic-usage.ts
