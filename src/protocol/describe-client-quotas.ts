@@ -12,7 +12,7 @@
  * - v0: throttle, top-level error, nullable entries with entity/values
  * - v1: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeClientQuotas
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeClientQuotas
  *
  * @packageDocumentation
  */
@@ -30,7 +30,7 @@ import { type DecodeResult, decodeSuccess } from "../result.js"
 /**
  * Match type for quota entity component filters.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeClientQuotas
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeClientQuotas
  */
 export const QuotaMatchType = {
   /** Match the entity exactly by name. */

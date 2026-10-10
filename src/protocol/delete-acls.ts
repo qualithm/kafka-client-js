@@ -14,7 +14,7 @@
  * - v1+: resource pattern type in matched ACLs
  * - v2+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DeleteAcls
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DeleteAcls
  *
  * @packageDocumentation
  */

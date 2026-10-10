@@ -13,7 +13,7 @@
  * - v0: error_code, error_message, topics array with quorum info
  * - v1: adds nodes array, per-replica last_caught_up_timestamp and last_fetch_timestamp
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeQuorum
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeQuorum
  *
  * @packageDocumentation
  */

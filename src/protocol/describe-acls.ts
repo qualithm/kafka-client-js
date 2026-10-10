@@ -14,7 +14,7 @@
  * - v1+: resource pattern type in results
  * - v2+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeAcls
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeAcls
  *
  * @packageDocumentation
  */
@@ -32,7 +32,7 @@ import { type DecodeResult, decodeSuccess } from "../result.js"
 /**
  * ACL resource types.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeAcls
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeAcls
  */
 export const AclResourceType = {
   /** Unknown resource type. */
@@ -56,7 +56,7 @@ export type AclResourceType = (typeof AclResourceType)[keyof typeof AclResourceT
 /**
  * ACL resource pattern types.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeAcls
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeAcls
  */
 export const AclResourcePatternType = {
   /** Unknown pattern type. */
@@ -77,7 +77,7 @@ export type AclResourcePatternType =
 /**
  * ACL operations.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeAcls
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeAcls
  */
 export const AclOperation = {
   /** Unknown operation. */
@@ -117,7 +117,7 @@ export type AclOperation = (typeof AclOperation)[keyof typeof AclOperation]
 /**
  * ACL permission types.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeAcls
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeAcls
  */
 export const AclPermissionType = {
   /** Unknown permission type. */

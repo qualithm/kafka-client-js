@@ -12,7 +12,7 @@
  * - v0: throttle, per-entity error codes
  * - v1: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_AlterClientQuotas
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_AlterClientQuotas
  *
  * @packageDocumentation
  */

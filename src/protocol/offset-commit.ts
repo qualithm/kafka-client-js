@@ -20,7 +20,7 @@
  * - v3+: throttle_time_ms
  * - v8+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_OffsetCommit
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_OffsetCommit
  *
  * @packageDocumentation
  */

@@ -10,7 +10,7 @@
  * length field." TCP provides no message boundaries, so the connection
  * layer must buffer and reassemble arbitrarily chunked data.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_common
+ * @see https://kafka.apache.org/42/design/protocol/#common-request-and-response-structure
  */
 
 import fc from "fast-check"
@@ -126,7 +126,7 @@ describe("property-based: connection chunk reassembly", () => {
   })
 
   /**
-   * @see https://kafka.apache.org/protocol.html#protocol_common — Size-prefixed framing
+   * @see https://kafka.apache.org/42/design/protocol/#common-request-and-response-structure — Size-prefixed framing
    *
    * Verifies that a single response delivered in arbitrary chunks
    * reassembles correctly and resolves the pending request.
@@ -160,7 +160,7 @@ describe("property-based: connection chunk reassembly", () => {
   })
 
   /**
-   * @see https://kafka.apache.org/protocol.html#protocol_common — Size-prefixed framing
+   * @see https://kafka.apache.org/42/design/protocol/#common-request-and-response-structure — Size-prefixed framing
    *
    * Verifies that multiple responses concatenated into a single chunk
    * are correctly demultiplexed to their respective pending requests.
@@ -204,7 +204,7 @@ describe("property-based: connection chunk reassembly", () => {
   })
 
   /**
-   * @see https://kafka.apache.org/protocol.html#protocol_common — Size-prefixed framing
+   * @see https://kafka.apache.org/42/design/protocol/#common-request-and-response-structure — Size-prefixed framing
    *
    * Verifies that multiple responses split across arbitrary chunk
    * boundaries all resolve correctly.

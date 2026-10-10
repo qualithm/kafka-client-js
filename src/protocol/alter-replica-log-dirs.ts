@@ -12,7 +12,7 @@
  * - v0+: per-topic-partition error codes
  * - v2+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_AlterReplicaLogDirs
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_AlterReplicaLogDirs
  *
  * @packageDocumentation
  */

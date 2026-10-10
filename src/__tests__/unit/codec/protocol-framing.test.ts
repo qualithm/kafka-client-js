@@ -1,8 +1,8 @@
 /**
  * Protocol framing tests.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_messages — Request/Response headers
- * @see https://kafka.apache.org/protocol.html#protocol_common — Size-prefixed framing
+ * @see https://kafka.apache.org/42/design/protocol/#the-messages — Request/Response headers
+ * @see https://kafka.apache.org/42/design/protocol/#common-request-and-response-structure — Size-prefixed framing
  */
 
 import { describe, expect, it } from "vitest"
@@ -26,7 +26,7 @@ const noop = (): void => {
 
 // ---------------------------------------------------------------------------
 // Header version selection
-// @see https://kafka.apache.org/protocol.html#protocol_messages — Header version rules
+// @see https://kafka.apache.org/42/design/protocol/#the-messages — Header version rules
 // ---------------------------------------------------------------------------
 
 describe("requestHeaderVersion", () => {

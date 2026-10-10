@@ -11,7 +11,7 @@
  * **Response versions:**
  * - v0: throttle_time_ms, topics array, next_cursor (nullable)
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeTopicPartitions
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeTopicPartitions
  *
  * @packageDocumentation
  */

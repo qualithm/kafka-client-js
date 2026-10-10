@@ -17,7 +17,7 @@
  * Header version selection is determined by whether the API key + version
  * uses flexible encoding per {@link isFlexibleVersion}.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_messages
+ * @see https://kafka.apache.org/42/design/protocol/#the-messages
  *
  * @packageDocumentation
  */

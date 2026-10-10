@@ -21,7 +21,7 @@
  * more {@link RecordBatch} encoded via {@link encodeRecordBatch}. The client
  * must pre-encode record batches before building the produce request.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_Produce
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_Produce
  *
  * @packageDocumentation
  */

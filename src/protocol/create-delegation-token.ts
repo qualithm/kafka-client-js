@@ -15,7 +15,7 @@
  * - v1–v2: same structure
  * - v3: flexible encoding, adds token_requester fields
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_CreateDelegationToken
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_CreateDelegationToken
  *
  * @packageDocumentation
  */

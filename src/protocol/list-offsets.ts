@@ -23,7 +23,7 @@
  * - `-2` (EARLIEST): Get the earliest available offset
  * - `-3` (MAX_TIMESTAMP, v7+): Get the offset with the largest timestamp
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_ListOffsets
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_ListOffsets
  *
  * @packageDocumentation
  */

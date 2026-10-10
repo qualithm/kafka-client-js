@@ -1,7 +1,7 @@
 /**
  * JoinGroup (API key 11) request/response tests.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_JoinGroup
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_JoinGroup
  */
 
 import { describe, expect, it } from "vitest"

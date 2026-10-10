@@ -4,7 +4,7 @@
  * Requires a running Kafka broker (see docker-compose.yaml).
  * Run: `docker compose up -d` then `bun run test:integration`
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_ApiVersions
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_ApiVersions
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"

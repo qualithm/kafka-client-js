@@ -17,7 +17,7 @@
  * - v4+: group_instance_id per member
  * - v5+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeGroups
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeGroups
  *
  * @packageDocumentation
  */

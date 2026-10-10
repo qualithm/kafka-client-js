@@ -8,8 +8,8 @@
  * basic produce/consume operations over SASL_PLAINTEXT listeners with
  * PLAIN, SCRAM-SHA-256, and SCRAM-SHA-512 mechanisms.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_SaslHandshake
- * @see https://kafka.apache.org/protocol.html#The_Messages_SaslAuthenticate
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_SaslHandshake
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_SaslAuthenticate
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
