@@ -15,7 +15,7 @@
  * - v1+: session_lifetime_ms
  * - v2+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_SaslAuthenticate
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_SaslAuthenticate
  *
  * @packageDocumentation
  */

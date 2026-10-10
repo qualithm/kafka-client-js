@@ -23,7 +23,7 @@
  * - v10+: removes cluster_authorized_operations
  * - v12+: topic ID (UUID)
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_Metadata
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_Metadata
  *
  * @packageDocumentation
  */

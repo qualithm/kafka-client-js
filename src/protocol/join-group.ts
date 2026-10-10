@@ -21,7 +21,7 @@
  * - v7: adds protocol_type to response
  * - v9: adds skip_assignment (KIP-814)
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_JoinGroup
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_JoinGroup
  *
  * @packageDocumentation
  */

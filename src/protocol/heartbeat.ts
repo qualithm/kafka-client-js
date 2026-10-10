@@ -16,7 +16,7 @@
  * - v1+: throttle_time_ms
  * - v4+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_Heartbeat
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_Heartbeat
  *
  * @packageDocumentation
  */

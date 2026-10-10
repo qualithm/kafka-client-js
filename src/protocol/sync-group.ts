@@ -18,7 +18,7 @@
  * - v4+: flexible encoding
  * - v5: adds protocol_type, protocol_name
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_SyncGroup
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_SyncGroup
  *
  * @packageDocumentation
  */

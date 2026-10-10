@@ -11,7 +11,7 @@
  * **Response versions:**
  * - v0: throttle_time_ms, error_code, unknown_state_filters, transaction_states
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_ListTransactions
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_ListTransactions
  *
  * @packageDocumentation
  */

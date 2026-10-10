@@ -18,7 +18,7 @@
  *        member_epoch, heartbeat_interval_ms, assignment
  *
  * @see https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol
- * @see https://kafka.apache.org/protocol.html#The_Messages_ConsumerGroupHeartbeat
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_ConsumerGroupHeartbeat
  *
  * @packageDocumentation
  */

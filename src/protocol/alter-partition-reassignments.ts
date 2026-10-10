@@ -10,7 +10,7 @@
  * **Response versions:**
  * - v0: throttle_time_ms, error_code, error_message, per-topic/partition results
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_AlterPartitionReassignments
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_AlterPartitionReassignments
  *
  * @packageDocumentation
  */

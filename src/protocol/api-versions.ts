@@ -14,7 +14,7 @@
  * - v1–v2: adds throttle time
  * - v3: flexible encoding with compact arrays and tagged fields
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_ApiVersions
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_ApiVersions
  *
  * @packageDocumentation
  */
