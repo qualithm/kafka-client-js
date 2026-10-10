@@ -15,7 +15,7 @@
  * - v3+: adds total_bytes and usable_bytes per log dir
  * - v4+: adds total_bytes and usable_bytes per topic-partition
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeLogDirs
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeLogDirs
  *
  * @packageDocumentation
  */

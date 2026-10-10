@@ -16,7 +16,7 @@
  * - v3+: adds config_documentation
  * - v4+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeConfigs
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeConfigs
  *
  * @packageDocumentation
  */

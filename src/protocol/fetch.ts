@@ -24,7 +24,7 @@
  * - v12+: flexible encoding
  * - v13+: topic_id (UUID) replaces topic name
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_Fetch
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_Fetch
  *
  * @packageDocumentation
  */

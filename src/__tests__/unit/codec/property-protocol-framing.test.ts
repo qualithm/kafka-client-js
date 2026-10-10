@@ -4,7 +4,7 @@
  * Uses fast-check to verify round-trip properties of request/response
  * header encoding/decoding and size-prefixed framing.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_messages — Protocol framing
+ * @see https://kafka.apache.org/42/design/protocol/#the-messages — Protocol framing
  */
 
 import fc from "fast-check"
@@ -85,7 +85,7 @@ describe("property-based: frameRequest", () => {
    * "Requests and responses are both prefixed with a 4-byte big-endian
    * length field that gives the length of the remaining message bytes."
    *
-   * @see https://kafka.apache.org/protocol.html#protocol_common
+   * @see https://kafka.apache.org/42/design/protocol/#common-request-and-response-structure
    */
   it("size prefix equals remaining bytes", () => {
     fc.assert(
@@ -148,7 +148,7 @@ describe("property-based: frameRequest", () => {
 
 describe("property-based: request header v1 (non-flexible)", () => {
   /**
-   * @see https://kafka.apache.org/protocol.html#protocol_messages — Request Header v1
+   * @see https://kafka.apache.org/42/design/protocol/#the-messages — Request Header v1
    */
   it("encodes then decodes to identical fields", () => {
     fc.assert(
@@ -186,7 +186,7 @@ describe("property-based: request header v1 (non-flexible)", () => {
 
 describe("property-based: request header v2 (flexible)", () => {
   /**
-   * @see https://kafka.apache.org/protocol.html#protocol_messages — Request Header v2
+   * @see https://kafka.apache.org/42/design/protocol/#the-messages — Request Header v2
    */
   it("encodes then decodes to identical fields with tagged fields", () => {
     fc.assert(
@@ -240,7 +240,7 @@ describe("property-based: request header v2 (flexible)", () => {
 
 describe("property-based: response header round-trips", () => {
   /**
-   * @see https://kafka.apache.org/protocol.html#protocol_messages — Response Header v0
+   * @see https://kafka.apache.org/42/design/protocol/#the-messages — Response Header v0
    */
   it("v0 (non-flexible) round-trips correlation ID", () => {
     fc.assert(
@@ -261,7 +261,7 @@ describe("property-based: response header round-trips", () => {
   })
 
   /**
-   * @see https://kafka.apache.org/protocol.html#protocol_messages — Response Header v1
+   * @see https://kafka.apache.org/42/design/protocol/#the-messages — Response Header v1
    */
   it("v1 (flexible) round-trips correlation ID and tagged fields", () => {
     fc.assert(
@@ -301,7 +301,7 @@ describe("property-based: frame parsing with arbitrary split points", () => {
    * regardless of whether the full frame is provided at once or
    * concatenated from arbitrary byte boundaries.
    *
-   * @see https://kafka.apache.org/protocol.html#protocol_common
+   * @see https://kafka.apache.org/42/design/protocol/#common-request-and-response-structure
    */
   it("concatenated frames parse identically to individual frames", () => {
     fc.assert(

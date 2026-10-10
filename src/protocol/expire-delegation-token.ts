@@ -15,7 +15,7 @@
  * - v1: same as v0
  * - v2: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_ExpireDelegationToken
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_ExpireDelegationToken
  *
  * @packageDocumentation
  */

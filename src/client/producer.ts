@@ -1742,7 +1742,7 @@ export function createProducer(options: ProducerOptions): KafkaProducer {
 /**
  * Retriable Kafka error codes for produce operations.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_error_codes
+ * @see https://kafka.apache.org/42/design/protocol/#error-codes
  */
 function isRetriableProduceError(errorCode: number): boolean {
   switch (errorCode) {

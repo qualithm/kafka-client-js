@@ -15,7 +15,7 @@
  * - v1–v2: same structure
  * - v3: adds token_requester fields to each token
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeDelegationToken
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeDelegationToken
  *
  * @packageDocumentation
  */

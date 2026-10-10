@@ -9,7 +9,7 @@
  * 2. **Connection pool** — manages a pool of {@link KafkaConnection} instances
  *    with configurable maximum connections per broker and lifecycle management.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_Metadata
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_Metadata
  *
  * @packageDocumentation
  */

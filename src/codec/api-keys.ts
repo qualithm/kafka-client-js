@@ -5,7 +5,7 @@
  * Version ranges define the minimum and maximum supported versions
  * for each API, used during version negotiation.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_api_keys
+ * @see https://kafka.apache.org/42/design/protocol/#api-keys
  *
  * @packageDocumentation
  */

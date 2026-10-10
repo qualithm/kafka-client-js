@@ -11,7 +11,7 @@
  * **Response versions:**
  * - v0: throttle_time_ms, transaction_states array
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeTransactions
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeTransactions
  *
  * @packageDocumentation
  */

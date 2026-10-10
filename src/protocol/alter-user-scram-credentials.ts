@@ -10,7 +10,7 @@
  * **Response versions:**
  * - v0: per-user results with error codes, flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_AlterUserScramCredentials
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_AlterUserScramCredentials
  *
  * @packageDocumentation
  */

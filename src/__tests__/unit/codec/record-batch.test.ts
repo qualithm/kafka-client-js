@@ -1,8 +1,8 @@
 /**
  * RecordBatch v2 (magic=2) encoding/decoding tests.
  *
- * @see https://kafka.apache.org/documentation/#recordbatch — RecordBatch format
- * @see https://kafka.apache.org/documentation/#record — Record format
+ * @see https://kafka.apache.org/42/implementation/message-format/#record-batch — RecordBatch format
+ * @see https://kafka.apache.org/42/implementation/message-format/#record — Record format
  */
 
 import fc from "fast-check"
