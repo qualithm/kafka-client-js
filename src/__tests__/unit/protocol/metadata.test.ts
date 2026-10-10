@@ -1,7 +1,7 @@
 /**
  * Metadata (API key 3) request/response tests.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_Metadata
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_Metadata
  */
 
 import { describe, expect, it } from "vitest"

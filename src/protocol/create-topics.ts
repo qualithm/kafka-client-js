@@ -16,7 +16,7 @@
  * - v5+: flexible encoding, adds num_partitions, replication_factor, configs to response
  * - v7+: adds topic_id
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_CreateTopics
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_CreateTopics
  *
  * @packageDocumentation
  */

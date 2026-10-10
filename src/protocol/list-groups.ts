@@ -15,7 +15,7 @@
  * - v3+: flexible encoding
  * - v4+: group_state per group
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_ListGroups
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_ListGroups
  *
  * @packageDocumentation
  */

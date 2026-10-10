@@ -48,25 +48,6 @@ await kafka.disconnect()
 
 ## Usage
 
-### Producing Messages
-
-```ts
-import { createKafka, createNodeSocketFactory } from "@qualithm/kafka-client"
-
-const kafka = createKafka({
-  config: { brokers: ["localhost:9092"], clientId: "my-app" },
-  socketFactory: createNodeSocketFactory()
-})
-await kafka.connect()
-
-const producer = kafka.producer()
-await producer.send("my-topic", [
-  { key: new TextEncoder().encode("key-1"), value: new TextEncoder().encode("hello") }
-])
-await producer.close()
-await kafka.disconnect()
-```
-
 ### Consuming Messages
 
 ```ts

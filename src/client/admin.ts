@@ -1,9 +1,6 @@
 /**
  * Kafka admin client for topic and cluster management.
  *
- * Provides administrative operations: creating/deleting topics, adding
- * partitions, describing/altering configuration, and listing topics.
- *
  * @packageDocumentation
  */
 

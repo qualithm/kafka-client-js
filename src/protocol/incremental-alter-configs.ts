@@ -13,7 +13,7 @@
  * - v0: throttle_time_ms, per-resource error code + error message
  * - v1: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_IncrementalAlterConfigs
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_IncrementalAlterConfigs
  *
  * @packageDocumentation
  */

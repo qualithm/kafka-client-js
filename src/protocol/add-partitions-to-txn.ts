@@ -15,7 +15,7 @@
  * - v0: throttle_time_ms, results by topic/partition
  * - v3+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_AddPartitionsToTxn
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_AddPartitionsToTxn
  *
  * @packageDocumentation
  */

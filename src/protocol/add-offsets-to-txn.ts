@@ -13,7 +13,7 @@
  * - v0: throttle_time_ms, error_code
  * - v3+: flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_AddOffsetsToTxn
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_AddOffsetsToTxn
  *
  * @packageDocumentation
  */

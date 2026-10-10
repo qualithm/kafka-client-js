@@ -9,7 +9,7 @@
  * no built-in TCP dependency. Runtime adapters (Bun, Node.js, Deno) provide the
  * socket implementation.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_messages
+ * @see https://kafka.apache.org/42/design/protocol/#the-messages
  *
  * @packageDocumentation
  */

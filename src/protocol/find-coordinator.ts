@@ -15,7 +15,7 @@
  * - v1–v3: adds throttle time, error message
  * - v4+: flexible encoding, coordinators array for batched responses
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_FindCoordinator
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_FindCoordinator
  *
  * @packageDocumentation
  */

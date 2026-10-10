@@ -4,8 +4,8 @@
  * Property-based tests verify round-trip encoding/decoding for all
  * Kafka primitive types.
  *
- * @see https://kafka.apache.org/protocol.html#protocol_types — Protocol primitive types
- * @see https://kafka.apache.org/protocol.html#protocol_messages — Tagged fields (KIP-482)
+ * @see https://kafka.apache.org/42/design/protocol/#protocol-primitive-types — Protocol primitive types
+ * @see https://kafka.apache.org/42/design/protocol/#the-messages — Tagged fields (KIP-482)
  */
 
 import fc from "fast-check"

@@ -13,7 +13,7 @@
  * - v0: throttle_time_ms, error_code, error_message, cluster_id, controller_id, brokers[], cluster_authorized_operations
  * - v1: adds endpoint_type
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeCluster
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeCluster
  *
  * @packageDocumentation
  */

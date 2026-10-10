@@ -10,7 +10,7 @@
  * **Response versions:**
  * - v0: per-user credential descriptions with mechanism/iterations, flexible encoding
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeUserScramCredentials
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeUserScramCredentials
  *
  * @packageDocumentation
  */
@@ -28,7 +28,7 @@ import { type DecodeResult, decodeSuccess } from "../result.js"
 /**
  * SCRAM mechanism types used in credential descriptions.
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_DescribeUserScramCredentials
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_DescribeUserScramCredentials
  */
 export const ScramMechanism = {
   /** Unknown mechanism. */

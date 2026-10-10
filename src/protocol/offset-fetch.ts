@@ -20,7 +20,7 @@
  * - v6+: flexible encoding
  * - v8+: groups[] (batched response)
  *
- * @see https://kafka.apache.org/protocol.html#The_Messages_OffsetFetch
+ * @see https://kafka.apache.org/42/design/protocol/#The_Messages_OffsetFetch
  *
  * @packageDocumentation
  */
