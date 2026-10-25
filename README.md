@@ -172,7 +172,7 @@ bun run docs
 
 ## Examples
 
-See the [`examples/`](examples/) directory for runnable examples:
+See the [`examples/`](examples/README.md) directory for runnable examples:
 
 | Example                                               | Description                                       |
 | ----------------------------------------------------- | ------------------------------------------------- |
